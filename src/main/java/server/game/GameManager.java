@@ -19,7 +19,7 @@ import server.player.Player;
 import server.player.PlayerHandler;
 
 public class GameManager {
-	private final Logger logger = LoggerFactory.getLogger(GameManager.class);
+	private final static Logger logger = LoggerFactory.getLogger(GameManager.class);
 	private final static int MAXIMUM_RUNNING_GAMES = 99;
 	private final Map<String, Game> games = new HashMap<>();
 	private final Queue<String> keys = new ArrayDeque<>();
