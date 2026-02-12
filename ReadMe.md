@@ -11,7 +11,7 @@
 
 ## Description
 
-This project provides a foundation for your own implementation of the Client. Import it in Eclipse to get an excellent
+This project provides a foundation for your own implementation of the Server. Import it in Eclipse to get an excellent
 starting point. You will only need to add your own classes, code, and so on, as all the build management is
 already configured nicely along with the integration of the provided network message implementation.
 
