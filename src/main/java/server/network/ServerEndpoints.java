@@ -41,13 +41,7 @@ public class ServerEndpoints {
 			@RequestParam(required = false, defaultValue = "false", value = "enableDebugMode") boolean enableDebugMode,
 			@RequestParam(required = false, defaultValue = "false", value = "enableDummyCompetition") boolean enableDummyCompetition) {
 
-		boolean showExceptionHandling = false;
-		if (showExceptionHandling) {
-			throw new GenericExampleException("Name: Something", "Message: went totally wrong");
-		}
-		
-		UniqueGameIdentifier gameIdentifier = new UniqueGameIdentifier(gameManager.createGame());
-		return gameIdentifier;
+        return new UniqueGameIdentifier(gameManager.createGame());
 	}
 
 	@RequestMapping(value = "/{gameID}/players", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
