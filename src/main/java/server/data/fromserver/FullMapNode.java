@@ -1,0 +1,26 @@
+package server.data.fromserver;
+
+import server.data.ETerrain;
+
+public record FullMapNode(ETerrain terrain, boolean isRevealed) {
+    public FullMapNode {
+        if (terrain == null)
+            throw new IllegalArgumentException("terrain is null");
+    }
+
+    public FullMapNode withIsRevealed(boolean isRevealed) {
+        return new FullMapNode(terrain, isRevealed);
+    }
+
+    public boolean isGrass() {
+        return terrain == ETerrain.Grass;
+    }
+
+    public boolean isMountain() {
+        return terrain == ETerrain.Mountain;
+    }
+
+    public boolean isWater() {
+        return terrain == ETerrain.Water;
+    }
+}
