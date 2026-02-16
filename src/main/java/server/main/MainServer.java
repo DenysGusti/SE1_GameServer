@@ -4,8 +4,10 @@ import java.util.Collections;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 /*
  * Should already be configured correctly for all use cases, i.e., you will most likely not 
@@ -15,8 +17,9 @@ import org.springframework.context.annotation.Configuration;
  * packages (separated by commas) that SPRING should search for beans, components/services, repositories, 
  * and also, relevant for us, controllers holding endpoints 
  */
-@SpringBootApplication
-@ComponentScan(basePackages = "server.network")
+@SpringBootApplication(scanBasePackages = "server")
+@EnableJpaRepositories(basePackages = "server.repositories")
+@EntityScan(basePackages = "server.entities")
 @Configuration
 public class MainServer {
 
