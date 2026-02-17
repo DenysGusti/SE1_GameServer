@@ -20,7 +20,9 @@ public class GameEntity {
     private boolean debugMode;
     private boolean dummyCompetition;
 
-    private String fullMapType;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false)
+    private FullMapType fullMapType;
 
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private final List<PlayerParticipationEntity> participations = new ArrayList<>();
@@ -34,10 +36,14 @@ public class GameEntity {
     protected GameEntity() {
     }
 
-    public GameEntity(String id, boolean debugMode, boolean dummyCompetition) {
+    public GameEntity(String id, boolean debugMode, boolean dummyCompetition, FullMapType fullMapType) {
+        if (id == null)
+            throw new IllegalArgumentException("id is null");
+
         this.id = id;
         this.debugMode = debugMode;
         this.dummyCompetition = dummyCompetition;
+        this.fullMapType = fullMapType;
         createdAt = LocalDateTime.now();
     }
 
@@ -69,7 +75,7 @@ public class GameEntity {
         return dummyCompetition;
     }
 
-    public String getFullMapType() {
+    public FullMapType getFullMapType() {
         return fullMapType;
     }
 
@@ -93,7 +99,7 @@ public class GameEntity {
         this.dummyCompetition = dummyCompetition;
     }
 
-    public void setFullMapType(String fullMapType) {
+    public void setFullMapType(FullMapType fullMapType) {
         this.fullMapType = fullMapType;
     }
 

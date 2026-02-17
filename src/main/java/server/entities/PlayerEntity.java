@@ -21,12 +21,14 @@ public class PlayerEntity {
     }
 
     public PlayerEntity(String uAccount, String firstName, String lastName) {
-        this.uAccount = uAccount;
-        this.firstName = firstName;
-        this.lastName = lastName;
-    }
+        if (uAccount == null)
+            throw new IllegalArgumentException("uAccount is null");
+        if (firstName == null)
+            throw new IllegalArgumentException("firstName is null");
+        if (lastName == null)
+            throw new IllegalArgumentException("lastName is null");
 
-    public void updateName(String firstName, String lastName) {
+        this.uAccount = uAccount;
         this.firstName = firstName;
         this.lastName = lastName;
     }
@@ -44,10 +46,16 @@ public class PlayerEntity {
     }
 
     public void setFirstName(String firstName) {
+        if (firstName == null)
+            throw new IllegalArgumentException("firstName is null");
+
         this.firstName = firstName;
     }
 
     public void setLastName(String lastName) {
+        if (lastName == null)
+            throw new IllegalArgumentException("lastName is null");
+
         this.lastName = lastName;
     }
 

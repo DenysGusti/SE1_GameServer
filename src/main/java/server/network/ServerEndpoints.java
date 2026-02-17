@@ -1,7 +1,5 @@
 package server.network;
 
-import java.util.UUID;
-
 import jakarta.servlet.http.HttpServletResponse;
 
 import org.slf4j.Logger;
@@ -22,14 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 import messagesbase.ResponseEnvelope;
 import messagesbase.UniqueGameIdentifier;
 import messagesbase.UniquePlayerIdentifier;
-import messagesbase.messagesfromclient.PlayerHalfMap;
 import messagesbase.messagesfromclient.PlayerRegistration;
-import messagesbase.messagesfromserver.GameState;
-import server.exceptions.GenericExampleException;
-import server.game.GameManager;
-import server.map.ServerMap;
-import server.network.fromclient.FromClientConverter;
-import server.player.Player;
+import server.exceptions.GenericServerException;
 import server.services.GameService;
 
 @EnableScheduling
@@ -41,6 +33,9 @@ public class ServerEndpoints {
     private final GameService gameService;
 
     public ServerEndpoints(GameService gameService) {
+        if (gameService == null)
+            throw new IllegalArgumentException("gameService is null");
+
         this.gameService = gameService;
     }
 
@@ -51,7 +46,6 @@ public class ServerEndpoints {
 
         UniqueGameIdentifier gameId = gameService.createGame(enableDebugMode, enableDummyCompetition);
         logger.info("Created new game with ID: {}", gameId.getUniqueGameID());
-
         return gameId;
     }
 
@@ -61,18 +55,26 @@ public class ServerEndpoints {
         gameService.removeOldGames();
     }
 
-//	@RequestMapping(value = "/{gameID}/players", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
-//	public @ResponseBody ResponseEnvelope<UniquePlayerIdentifier> registerPlayer(
-//			@Validated @PathVariable UniqueGameIdentifier gameID,
-//			@Validated @RequestBody PlayerRegistration playerRegistration) {
-//		UniquePlayerIdentifier newPlayerID = new UniquePlayerIdentifier(UUID.randomUUID().toString());
-//
-//		final Player player = EndpointInputDataProcessing.createPlayerFromPlayerRegistrationInfo(gameManager.getGames(), gameID, newPlayerID, playerRegistration);
-//		gameManager.registerPlayer(gameID, player);
-//
-//		ResponseEnvelope<UniquePlayerIdentifier> playerIDMessage = new ResponseEnvelope<>(newPlayerID);
-//		return playerIDMessage;
-//	}
+    @ExceptionHandler({GenericServerException.class})
+    public @ResponseBody ResponseEnvelope<?> handleException(GenericServerException genericServerException,
+                                                             HttpServletResponse httpServletResponse) {
+        logger.warn("Business rule violation: {}", genericServerException.getMessage());
+        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+        return new ResponseEnvelope<>(genericServerException.getClass().getSimpleName(), genericServerException.getMessage());
+    }
+
+    @RequestMapping(value = "/{gameID}/players", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
+    public @ResponseBody ResponseEnvelope<UniquePlayerIdentifier> registerPlayer(
+            @Validated @PathVariable UniqueGameIdentifier gameID,
+            @Validated @RequestBody PlayerRegistration playerRegistration) {
+        logger.info("Received player registration attempt from {} for game ID: {}",
+                playerRegistration.getStudentUAccount(), gameID.getUniqueGameID());
+        UniquePlayerIdentifier playerId = gameService.registerPlayer(gameID, playerRegistration);
+        logger.info("Successfully registered player {} in game ID: {} with player ID: {}",
+                playerRegistration.getStudentUAccount(), gameID.getUniqueGameID(), playerId.getUniquePlayerID());
+        return new ResponseEnvelope<>(playerId);
+    }
+
 //
 //	@RequestMapping(value = "/{gameID}/halfmaps", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
 //	public @ResponseBody ResponseEnvelope<?> receiveMap(@Validated @PathVariable UniqueGameIdentifier gameID,
@@ -91,15 +93,6 @@ public class ServerEndpoints {
 //		GameState gameState = EndpointInputDataProcessing.procesGameState(gameManager.getGames(), gameID, playerID);
 //		ResponseEnvelope<GameState> result = new ResponseEnvelope<>(gameState);
 //
-//		return result;
-//	}
-//
-//	@ExceptionHandler({ GenericExampleException.class })
-//	public @ResponseBody ResponseEnvelope<?> handleException(GenericExampleException ex, HttpServletResponse response) {
-//		ResponseEnvelope<?> result = new ResponseEnvelope<>(ex.getErrorName(), ex.getMessage());
-//		ex.processGameState(gameManager);
-//
-//		response.setStatus(HttpServletResponse.SC_OK);
 //		return result;
 //	}
 }
