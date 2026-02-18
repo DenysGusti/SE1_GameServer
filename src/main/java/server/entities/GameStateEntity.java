@@ -2,6 +2,8 @@ package server.entities;
 
 import jakarta.persistence.*;
 import messagesbase.messagesfromclient.EMove;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,13 +21,14 @@ public class GameStateEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "game_id", nullable = false, updatable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private GameEntity game;
 
     @Column(nullable = false, updatable = false)
     private int currentRound;
 
     @Enumerated(EnumType.STRING)
-    private EMove move;
+    private EMove previousMove;
 
     @OneToMany(mappedBy = "gameState", cascade = CascadeType.ALL, orphanRemoval = true)
     private final List<PlayerStateEntity> playerStates = new ArrayList<>();
@@ -33,10 +36,21 @@ public class GameStateEntity {
     protected GameStateEntity() {
     }
 
-    public GameStateEntity(GameEntity game, int currentRound, EMove move) {
+    public GameStateEntity(GameEntity game, int currentRound) {
+        if (game == null)
+            throw new IllegalArgumentException("game is null");
+        if (currentRound < 0)
+            throw new IllegalArgumentException("currentRound is negative");
+
         this.game = game;
         this.currentRound = currentRound;
-        this.move = move;
+    }
+
+    public void setPreviousMove(EMove previousMove) {
+        if (previousMove == null)
+            throw new IllegalArgumentException("previousMove is null");
+
+        this.previousMove = previousMove;
     }
 
     public void addPlayerState(PlayerStateEntity playerState) {
@@ -55,8 +69,8 @@ public class GameStateEntity {
         return currentRound;
     }
 
-    public EMove getMove() {
-        return move;
+    public EMove getPreviousMove() {
+        return previousMove;
     }
 
     public List<PlayerStateEntity> getPlayerStates() {

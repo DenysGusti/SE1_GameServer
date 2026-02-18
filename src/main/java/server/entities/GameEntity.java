@@ -39,6 +39,8 @@ public class GameEntity {
     public GameEntity(String id, boolean debugMode, boolean dummyCompetition, FullMapType fullMapType) {
         if (id == null)
             throw new IllegalArgumentException("id is null");
+        if (fullMapType == null)
+            throw new IllegalArgumentException("fullMapType is null");
 
         this.id = id;
         this.debugMode = debugMode;

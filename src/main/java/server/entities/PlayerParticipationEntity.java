@@ -2,9 +2,12 @@ package server.entities;
 
 import jakarta.persistence.*;
 import messagesbase.messagesfromclient.EMove;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.Optional;
 
 @Entity
 @Table(name = "player_participation")
@@ -23,6 +26,7 @@ public class PlayerParticipationEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "game_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private GameEntity game;
 
     private LocalDateTime lastQueryAt;
@@ -45,6 +49,13 @@ public class PlayerParticipationEntity {
     }
 
     public PlayerParticipationEntity(String fakePlayerId, PlayerEntity player, GameEntity game, boolean firstTurn) {
+        if (fakePlayerId == null)
+            throw new IllegalArgumentException("fakePlayerId is null");
+        if (player == null)
+            throw new IllegalArgumentException("player is null");
+        if (game == null)
+            throw new IllegalArgumentException("game is null");
+
         this.fakePlayerId = fakePlayerId;
         this.player = player;
         this.game = game;
@@ -75,12 +86,12 @@ public class PlayerParticipationEntity {
         return game;
     }
 
-    public LocalDateTime getLastQueryAt() {
-        return lastQueryAt;
+    public Optional<LocalDateTime> getLastQueryAt() {
+        return Optional.ofNullable(lastQueryAt);
     }
 
-    public LocalDateTime getLastCommandAt() {
-        return lastCommandAt;
+    public Optional<LocalDateTime> getLastCommandAt() {
+        return Optional.ofNullable(lastCommandAt);
     }
 
     public boolean isFirstTurn() {
