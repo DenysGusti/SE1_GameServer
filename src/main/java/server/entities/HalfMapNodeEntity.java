@@ -2,23 +2,29 @@ package server.entities;
 
 import jakarta.persistence.*;
 import messagesbase.messagesfromclient.ETerrain;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.util.Objects;
 
 @Entity
-@Table(name = "half_map_nodes")
-@IdClass(HalfMapNodeId.class)
+@Table(name = "half_map_nodes", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"participation_id", "x", "y"})
+})
 public class HalfMapNodeEntity {
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(nullable = false, unique = true, updatable = false)
+    private String id;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "participation_id", nullable = false, updatable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private PlayerParticipationEntity participation;
 
-    @Id
     @Column(nullable = false, updatable = false)
     private int x;
 
-    @Id
     @Column(nullable = false, updatable = false)
     private int y;
 
@@ -33,6 +39,15 @@ public class HalfMapNodeEntity {
     }
 
     public HalfMapNodeEntity(PlayerParticipationEntity participation, int x, int y, ETerrain terrain, boolean fortPresent) {
+        if (participation == null)
+            throw new IllegalArgumentException("participation is null");
+        if (x < 0)
+            throw new IllegalArgumentException("x is negative");
+        if (y < 0)
+            throw new IllegalArgumentException("y is negative");
+        if (terrain == null)
+            throw new IllegalArgumentException("terrain is null");
+
         this.participation = participation;
         this.x = x;
         this.y = y;
@@ -67,11 +82,11 @@ public class HalfMapNodeEntity {
         if (o == null || getClass() != o.getClass())
             return false;
         var that = (HalfMapNodeEntity) o;
-        return x == that.x && y == that.y && Objects.equals(participation, that.participation);
+        return Objects.equals(id, that.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(participation, x, y);
+        return Objects.hash(id);
     }
 }
