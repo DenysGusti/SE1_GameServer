@@ -3,24 +3,27 @@ package server.services;
 import messagesbase.UniqueGameIdentifier;
 import messagesbase.UniquePlayerIdentifier;
 import messagesbase.messagesfromclient.PlayerRegistration;
+import messagesbase.messagesfromserver.EPlayerGameState;
+import messagesbase.messagesfromserver.GameState;
+import messagesbase.messagesfromserver.PlayerState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import server.entities.FullMapType;
-import server.entities.GameEntity;
-import server.entities.PlayerEntity;
-import server.entities.PlayerParticipationEntity;
-import server.exceptions.ManualGameCreationOveruseException;
-import server.exceptions.MatchNotFoundException;
-import server.exceptions.PlayerRegisterRuleException;
-import server.exceptions.UnknownUAccountException;
+import server.entities.*;
+import server.exceptions.*;
 import server.repositories.GameRepository;
+import server.repositories.GameStateRepository;
 import server.repositories.PlayerParticipationRepository;
 import server.repositories.PlayerRepository;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.random.RandomGenerator;
 
 @Service
@@ -32,14 +35,17 @@ public class GameService {
     private static final int GAME_LIFETIME_MINUTES = 1;
     private static final int PLAYERS_PER_GAME = 2;
     private static final int MAX_GAMES_PER_PLAYER = 3;
+    private static final Duration MINIMUM_POLLING_INTERVAL = Duration.ofMillis(400);
 
     private final RandomGenerator randomGenerator;
     private final GameRepository gameRepository;
     private final PlayerRepository playerRepository;
     private final PlayerParticipationRepository playerParticipationRepository;
+    private final GameStateRepository gameStateRepository;
 
-    public GameService(RandomGenerator randomGenerator, GameRepository gameRepository, PlayerRepository playerRepository,
-                       PlayerParticipationRepository playerParticipationRepository) {
+    public GameService(RandomGenerator randomGenerator, GameRepository gameRepository,
+                       PlayerRepository playerRepository, PlayerParticipationRepository playerParticipationRepository,
+                       GameStateRepository gameStateRepository) {
         if (randomGenerator == null)
             throw new IllegalArgumentException("randomGenerator is null");
         if (gameRepository == null)
@@ -48,11 +54,14 @@ public class GameService {
             throw new IllegalArgumentException("playerRepository is null");
         if (playerParticipationRepository == null)
             throw new IllegalArgumentException("playerParticipationRepository is null");
+        if (gameStateRepository == null)
+            throw new IllegalArgumentException("gameStateRepository is null");
 
         this.gameRepository = gameRepository;
         this.randomGenerator = randomGenerator;
         this.playerRepository = playerRepository;
         this.playerParticipationRepository = playerParticipationRepository;
+        this.gameStateRepository = gameStateRepository;
     }
 
     @Transactional
@@ -97,11 +106,14 @@ public class GameService {
     }
 
     @Transactional
-    public UniquePlayerIdentifier registerPlayer(UniqueGameIdentifier uniqueGameIdentifier, PlayerRegistration playerRegistration) {
+    public UniquePlayerIdentifier registerPlayer(UniqueGameIdentifier uniqueGameIdentifier,
+                                                 PlayerRegistration playerRegistration) {
         String uAccount = playerRegistration.getStudentUAccount();
         // optional to restrict players
-//        if (!playerRepository.existsById(uAccount))
+        if (!playerRepository.existsById(uAccount)) {
+            logger.info("New player tried to join game with unknown uAccount: {}", uAccount);
 //            throw new UnknownUAccountException(uAccount);
+        }
 
         String gameId = uniqueGameIdentifier.getUniqueGameID();
         GameEntity game = gameRepository.findById(gameId)
@@ -111,8 +123,8 @@ public class GameService {
         if (currentPlayers >= PLAYERS_PER_GAME)
             throw new PlayerRegisterRuleException();
 
-        long activeGamesForStudent = playerParticipationRepository.countByPlayer_uAccount(uAccount);
-        if (activeGamesForStudent >= MAX_GAMES_PER_PLAYER)
+        long activeGamesForPlayer = playerParticipationRepository.countByPlayer_uAccount(uAccount);
+        if (activeGamesForPlayer >= MAX_GAMES_PER_PLAYER)
             throw new ManualGameCreationOveruseException();
 
         var player = playerRepository.findById(uAccount)
@@ -127,16 +139,91 @@ public class GameService {
         player = playerRepository.save(player);
 
         boolean isFirstTurn;
+        PlayerParticipationEntity firstPlayerParticipation = null;
         if (currentPlayers == 0)
             isFirstTurn = randomGenerator.nextBoolean();
         else {
-            PlayerParticipationEntity firstPlayer = playerParticipationRepository.findByGameId(gameId).getFirst();
-            isFirstTurn = !firstPlayer.isFirstTurn();
+            firstPlayerParticipation = playerParticipationRepository.findByGameId(gameId).getFirst();
+            isFirstTurn = !firstPlayerParticipation.isFirstTurn();
         }
         String fakePlayerId = java.util.UUID.randomUUID().toString();
         var playerParticipation = new PlayerParticipationEntity(fakePlayerId, player, game, isFirstTurn);
         playerParticipation = playerParticipationRepository.save(playerParticipation);
 
+        GameStateEntity newGameState;
+        if (currentPlayers == 0) {
+            newGameState = new GameStateEntity(game, 0);
+            var playerState = new PlayerStateEntity(playerParticipation, newGameState, EPlayerGameState.MustWait, false);
+            newGameState.addPlayerState(playerState);
+        } else
+            newGameState = createSecondGameState(firstPlayerParticipation, playerParticipation, game);
+        gameStateRepository.save(newGameState);
+
         return new UniquePlayerIdentifier(playerParticipation.getPlayerId());
     }
+
+    @NonNull
+    private static GameStateEntity createSecondGameState(PlayerParticipationEntity firstPlayerParticipation,
+                                                PlayerParticipationEntity secondPlayerParticipation, GameEntity game) {
+        EPlayerGameState firstPlayerStateEnum = firstPlayerParticipation.isFirstTurn() ?
+                EPlayerGameState.MustAct : EPlayerGameState.MustWait;
+        EPlayerGameState secondPlayerStateEnum = secondPlayerParticipation.isFirstTurn() ?
+                EPlayerGameState.MustAct : EPlayerGameState.MustWait;
+
+        var newGameState = new GameStateEntity(game, 1);
+        var firstPlayerState =
+                new PlayerStateEntity(firstPlayerParticipation, newGameState, firstPlayerStateEnum, false);
+        var secondPlayerState =
+                new PlayerStateEntity(secondPlayerParticipation, newGameState, secondPlayerStateEnum, false);
+
+        newGameState.addPlayerState(firstPlayerState);
+        newGameState.addPlayerState(secondPlayerState);
+        return newGameState;
+    }
+
+//    @Transactional
+//    public GameState getGameState(UniqueGameIdentifier uniqueGameIdentifier, UniquePlayerIdentifier uniquePlayerIdentifier) {
+//        String gameId = uniqueGameIdentifier.getUniqueGameID();
+//        GameEntity game = gameRepository.findById(gameId)
+//                .orElseThrow(() -> new MatchNotFoundException(gameId));
+//
+//        String playerId = uniquePlayerIdentifier.getUniquePlayerID();
+//        PlayerParticipationEntity requestingPlayer = playerParticipationRepository.findById(playerId)
+//                .orElseThrow(() -> new PlayerUnknownException(gameId, playerId));
+//
+//        if (!requestingPlayer.getGame().getId().equals(gameId))
+//            throw new PlayerUnknownException(gameId, playerId);
+//
+//        LocalDateTime now = LocalDateTime.now();
+//        requestingPlayer.getLastQueryAt().ifPresent(lastQuery -> {
+//            long millisSinceLastQuery = ChronoUnit.MILLIS.between(lastQuery, now);
+//            if (millisSinceLastQuery < MINIMUM_POLLING_INTERVAL.toMillis())
+//                throw new TooFastPollingException();
+//        });
+//
+//        requestingPlayer.updateLastQuery();
+//        playerParticipationRepository.save(requestingPlayer);
+//
+//        List<PlayerParticipationEntity> allParticipations = playerParticipationRepository.findByGameId(gameId);
+//        Set<PlayerState> playerStates = new HashSet<>();
+//
+//        for (PlayerParticipationEntity p : allParticipations) {
+//            // Placeholder state logic: assigned based on the 'firstTurn' boolean
+//            EPlayerGameState state = p.isFirstTurn() ? EPlayerGameState.MustAct : EPlayerGameState.MustWait;
+//
+//            PlayerState ps = new PlayerState(
+//                    p.getPlayer().getFirstName(),
+//                    p.getPlayer().getLastName(),
+//                    p.getPlayer().getUAccount(),
+//                    state,
+//                    new UniquePlayerIdentifier(p.getPlayerId()),
+//                    p.getTreasureX() != null // true if they found the treasure, false otherwise
+//            );
+//            playerStates.add(ps);
+//        }
+//
+//        String gameStateId = java.util.UUID.randomUUID().toString();
+//
+//        return new GameState(playerStates, new UniqueGameStateIdentifier(gameStateId));
+//    }
 }
