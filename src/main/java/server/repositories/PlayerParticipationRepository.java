@@ -13,4 +13,6 @@ public interface PlayerParticipationRepository extends JpaRepository<PlayerParti
     long countByPlayer_uAccount(String uAccount);
 
     List<PlayerParticipationEntity> findByGameId(String gameId);
+
+    boolean existsByFakePlayerId(String fakePlayerId);
 }

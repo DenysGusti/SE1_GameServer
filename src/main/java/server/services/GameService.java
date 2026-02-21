@@ -146,7 +146,13 @@ public class GameService {
             firstPlayerParticipation = playerParticipationRepository.findByGameId(gameId).getFirst();
             isFirstTurn = !firstPlayerParticipation.isFirstTurn();
         }
-        String fakePlayerId = java.util.UUID.randomUUID().toString();
+
+        String fakePlayerId;
+        do {
+            fakePlayerId = java.util.UUID.randomUUID().toString();
+        } while (playerParticipationRepository.existsById(fakePlayerId) ||
+                playerParticipationRepository.existsByFakePlayerId(fakePlayerId));
+
         var playerParticipation = new PlayerParticipationEntity(fakePlayerId, player, game, isFirstTurn);
         playerParticipation = playerParticipationRepository.save(playerParticipation);
 
