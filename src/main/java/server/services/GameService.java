@@ -35,7 +35,7 @@ public class GameService {
     private static final int GAME_LIFETIME_MINUTES = 1;
     private static final int PLAYERS_PER_GAME = 2;
     private static final int MAX_GAMES_PER_PLAYER = 3;
-    private static final Duration MINIMUM_POLLING_INTERVAL = Duration.ofMillis(400);
+    private static final Duration MINIMUM_POLLING_INTERVAL = Duration.ofMillis(300);
 
     private final RandomGenerator randomGenerator;
     private final GameRepository gameRepository;
