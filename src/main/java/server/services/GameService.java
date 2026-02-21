@@ -157,11 +157,9 @@ public class GameService {
         playerParticipation = playerParticipationRepository.save(playerParticipation);
 
         GameStateEntity newGameState;
-        if (currentPlayers == 0) {
-            newGameState = new GameStateEntity(game, 0);
-            var playerState = new PlayerStateEntity(playerParticipation, newGameState, EPlayerGameState.MustWait, false);
-            newGameState.addPlayerState(playerState);
-        } else
+        if (currentPlayers == 0)
+            newGameState = createFirstGameState(playerParticipation, game);
+        else
             newGameState = createSecondGameState(firstPlayerParticipation, playerParticipation, game);
         gameStateRepository.save(newGameState);
 
@@ -169,8 +167,20 @@ public class GameService {
     }
 
     @NonNull
+    private static GameStateEntity createFirstGameState(PlayerParticipationEntity firstPlayerParticipation,
+                                                        GameEntity game) {
+        var newGameState = new GameStateEntity(game, 0);
+        var firstPlayerState =
+                new PlayerStateEntity(firstPlayerParticipation, newGameState, EPlayerGameState.MustWait, false);
+
+        newGameState.addPlayerState(firstPlayerState);
+        return newGameState;
+    }
+
+    @NonNull
     private static GameStateEntity createSecondGameState(PlayerParticipationEntity firstPlayerParticipation,
-                                                PlayerParticipationEntity secondPlayerParticipation, GameEntity game) {
+                                                         PlayerParticipationEntity secondPlayerParticipation,
+                                                         GameEntity game) {
         EPlayerGameState firstPlayerStateEnum = firstPlayerParticipation.isFirstTurn() ?
                 EPlayerGameState.MustAct : EPlayerGameState.MustWait;
         EPlayerGameState secondPlayerStateEnum = secondPlayerParticipation.isFirstTurn() ?
