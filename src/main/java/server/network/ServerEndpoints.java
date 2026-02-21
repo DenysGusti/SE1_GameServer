@@ -2,6 +2,7 @@ package server.network;
 
 import jakarta.servlet.http.HttpServletResponse;
 
+import messagesbase.messagesfromserver.GameState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -78,18 +79,18 @@ public class ServerEndpoints {
         return new ResponseEnvelope<>(playerId);
     }
 
-//    @RequestMapping(value = "/{gameID}/states/{playerID}", method = RequestMethod.GET, produces = MediaType.APPLICATION_XML_VALUE)
-//    public @ResponseBody ResponseEnvelope<?> sendGameState(@Validated @PathVariable UniqueGameIdentifier gameID,
-//                                                           @Validated @PathVariable UniquePlayerIdentifier playerID) {
-//        logger.info("Received game state request for game ID: {} from player ID: {}",
-//                gameID.getUniqueGameID(), playerID.getUniquePlayerID());
-//
-//        GameState gameState = gameService.getGameState(gameID, playerID);
-//
-//        logger.debug("Successfully generated game state for game ID: {} with ID: {}",
-//                gameID.getUniqueGameID(), gameState.getGameStateId());
-//        return new ResponseEnvelope<>(gameState);
-//    }
+    @RequestMapping(value = "/{gameID}/states/{playerID}", method = RequestMethod.GET, produces = MediaType.APPLICATION_XML_VALUE)
+    public @ResponseBody ResponseEnvelope<?> sendGameState(@Validated @PathVariable UniqueGameIdentifier gameID,
+                                                           @Validated @PathVariable UniquePlayerIdentifier playerID) {
+        logger.info("Received game state request for game ID: {} from player ID: {}",
+                gameID.getUniqueGameID(), playerID.getUniquePlayerID());
+
+        GameState gameState = gameService.getGameState(gameID, playerID);
+
+        logger.debug("Successfully generated game state for game ID: {} with ID: {}",
+                gameID.getUniqueGameID(), gameState.getGameStateId());
+        return new ResponseEnvelope<>(gameState);
+    }
 
 //
 //	@RequestMapping(value = "/{gameID}/halfmaps", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)

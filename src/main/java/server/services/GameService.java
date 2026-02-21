@@ -197,49 +197,56 @@ public class GameService {
         return newGameState;
     }
 
-//    @Transactional
-//    public GameState getGameState(UniqueGameIdentifier uniqueGameIdentifier, UniquePlayerIdentifier uniquePlayerIdentifier) {
-//        String gameId = uniqueGameIdentifier.getUniqueGameID();
-//        GameEntity game = gameRepository.findById(gameId)
-//                .orElseThrow(() -> new MatchNotFoundException(gameId));
-//
-//        String playerId = uniquePlayerIdentifier.getUniquePlayerID();
-//        PlayerParticipationEntity requestingPlayer = playerParticipationRepository.findById(playerId)
-//                .orElseThrow(() -> new PlayerUnknownException(gameId, playerId));
-//
-//        if (!requestingPlayer.getGame().getId().equals(gameId))
-//            throw new PlayerUnknownException(gameId, playerId);
-//
-//        LocalDateTime now = LocalDateTime.now();
-//        requestingPlayer.getLastQueryAt().ifPresent(lastQuery -> {
-//            long millisSinceLastQuery = ChronoUnit.MILLIS.between(lastQuery, now);
-//            if (millisSinceLastQuery < MINIMUM_POLLING_INTERVAL.toMillis())
-//                throw new TooFastPollingException();
-//        });
-//
-//        requestingPlayer.updateLastQuery();
-//        playerParticipationRepository.save(requestingPlayer);
-//
-//        List<PlayerParticipationEntity> allParticipations = playerParticipationRepository.findByGameId(gameId);
-//        Set<PlayerState> playerStates = new HashSet<>();
-//
-//        for (PlayerParticipationEntity p : allParticipations) {
-//            // Placeholder state logic: assigned based on the 'firstTurn' boolean
-//            EPlayerGameState state = p.isFirstTurn() ? EPlayerGameState.MustAct : EPlayerGameState.MustWait;
-//
-//            PlayerState ps = new PlayerState(
-//                    p.getPlayer().getFirstName(),
-//                    p.getPlayer().getLastName(),
-//                    p.getPlayer().getUAccount(),
-//                    state,
-//                    new UniquePlayerIdentifier(p.getPlayerId()),
-//                    p.getTreasureX() != null // true if they found the treasure, false otherwise
-//            );
-//            playerStates.add(ps);
-//        }
-//
-//        String gameStateId = java.util.UUID.randomUUID().toString();
-//
-//        return new GameState(playerStates, new UniqueGameStateIdentifier(gameStateId));
-//    }
+    @Transactional
+    public GameState getGameState(UniqueGameIdentifier uniqueGameIdentifier, UniquePlayerIdentifier uniquePlayerIdentifier) {
+        String gameId = uniqueGameIdentifier.getUniqueGameID();
+        gameRepository.findById(gameId)
+                .orElseThrow(() -> new MatchNotFoundException(gameId));
+
+        String playerId = uniquePlayerIdentifier.getUniquePlayerID();
+        PlayerParticipationEntity requestingPlayer = playerParticipationRepository.findById(playerId)
+                .orElseThrow(() -> new PlayerUnknownException(gameId, playerId));
+
+        if (!requestingPlayer.getGame().getId().equals(gameId))
+            throw new PlayerUnknownException(gameId, playerId);
+
+        LocalDateTime now = LocalDateTime.now();
+        requestingPlayer.getLastQueryAt().ifPresent(lastQuery -> {
+            long millisSinceLastQuery = ChronoUnit.MILLIS.between(lastQuery, now);
+            if (millisSinceLastQuery < MINIMUM_POLLING_INTERVAL.toMillis()) {
+                logger.warn("Player {} polling too frequently: {} ms",
+                        requestingPlayer.getPlayer().getUAccount(), millisSinceLastQuery);
+                throw new TooFastPollingException();
+            }
+        });
+
+        requestingPlayer.updateLastQuery();
+        playerParticipationRepository.save(requestingPlayer);
+
+        GameStateEntity latestGameState = gameStateRepository.findFirstByGameIdOrderByCurrentRoundDesc(gameId)
+                .orElseThrow(() -> new IllegalStateException("No game state exists yet."));
+
+        Set<PlayerState> playerStates = new HashSet<>();
+
+        for (PlayerStateEntity dbPlayerState : latestGameState.getPlayerStates()) {
+            PlayerParticipationEntity playerParticipation = dbPlayerState.getParticipation();
+            var displayPlayerId = playerParticipation.getPlayerId().equals(playerId) ?
+                    new UniquePlayerIdentifier(playerParticipation.getPlayerId()) :
+                    new UniquePlayerIdentifier(playerParticipation.getFakePlayerId());
+
+            PlayerEntity player = playerParticipation.getPlayer();
+
+            var playerState = new PlayerState(
+                    player.getFirstName(),
+                    player.getLastName(),
+                    player.getUAccount(),
+                    dbPlayerState.getState(),
+                    displayPlayerId,
+                    dbPlayerState.hasFoundTreasure()
+            );
+            playerStates.add(playerState);
+        }
+
+        return new GameState(playerStates, latestGameState.getId());
+    }
 }
