@@ -1,11 +1,14 @@
-package server.entities;
+package server.entity;
 
 import jakarta.persistence.*;
 import messagesbase.messagesfromclient.EMove;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
+import server.data.XYPair;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -28,6 +31,9 @@ public class PlayerParticipationEntity {
     @JoinColumn(name = "game_id", nullable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private GameEntity game;
+
+    @OneToMany(mappedBy = "participation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private final List<HalfMapNodeEntity> halfMapNodes = new ArrayList<>();
 
     private LocalDateTime lastQueryAt;
 
@@ -62,11 +68,11 @@ public class PlayerParticipationEntity {
         this.firstTurn = firstTurn;
     }
 
-    public void updateLastQuery() {
+    public void updateLastQueryAt() {
         lastQueryAt = LocalDateTime.now();
     }
 
-    public void updateLastCommand() {
+    public void updateLastCommandAt() {
         lastCommandAt = LocalDateTime.now();
     }
 
@@ -134,14 +140,27 @@ public class PlayerParticipationEntity {
         this.firstTurn = firstTurn;
     }
 
-    public void setFortLocation(Integer x, Integer y) {
-        this.fortX = x;
-        this.fortY = y;
+    public void setFortLocation(XYPair fortLocation) {
+        if (fortLocation == null)
+            throw new IllegalArgumentException("fortLocation is null");
+
+        fortX = fortLocation.x();
+        fortY = fortLocation.y();
     }
 
-    public void setTreasureLocation(Integer x, Integer y) {
-        this.treasureX = x;
-        this.treasureY = y;
+    public void setTreasureLocation(XYPair treasureLocation) {
+        if (treasureLocation == null)
+            throw new IllegalArgumentException("treasureLocation is null");
+
+        treasureX = treasureLocation.x();
+        treasureY = treasureLocation.y();
+    }
+
+    public void addHalfMapNode(HalfMapNodeEntity node) {
+        if (node == null)
+            throw new IllegalArgumentException("node is null");
+
+        halfMapNodes.add(node);
     }
 
     public void setPendingMove(EMove direction, Integer count) {

@@ -1,4 +1,4 @@
-package server.entities;
+package server.entity;
 
 import jakarta.persistence.*;
 import messagesbase.messagesfromserver.EPlayerGameState;
@@ -33,6 +33,9 @@ public class PlayerStateEntity {
 
     @Column(nullable = false)
     private boolean foundTreasure;
+
+    private Integer playerX;
+    private Integer playerY;
 
     protected PlayerStateEntity() {
     }

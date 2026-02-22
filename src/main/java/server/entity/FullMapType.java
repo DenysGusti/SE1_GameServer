@@ -1,4 +1,4 @@
-package server.entities;
+package server.entity;
 
 public enum FullMapType {
     Horizontal,
