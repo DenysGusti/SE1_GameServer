@@ -2,6 +2,7 @@ package server.network;
 
 import jakarta.servlet.http.HttpServletResponse;
 
+import messagesbase.messagesfromclient.PlayerHalfMap;
 import messagesbase.messagesfromserver.GameState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,8 +23,8 @@ import messagesbase.ResponseEnvelope;
 import messagesbase.UniqueGameIdentifier;
 import messagesbase.UniquePlayerIdentifier;
 import messagesbase.messagesfromclient.PlayerRegistration;
-import server.exceptions.GenericServerException;
-import server.services.GameService;
+import server.exception.GenericServerException;
+import server.service.GameService;
 
 @EnableScheduling
 @RestController
@@ -59,7 +60,7 @@ public class ServerEndpoints {
     @ExceptionHandler({GenericServerException.class})
     public @ResponseBody ResponseEnvelope<?> handleException(GenericServerException genericServerException,
                                                              HttpServletResponse httpServletResponse) {
-        logger.warn("Business rule violation: {}", genericServerException.getMessage());
+        logger.warn("Business rule violation: {}", genericServerException.getClass().getSimpleName());
         httpServletResponse.setStatus(HttpServletResponse.SC_OK);
         return new ResponseEnvelope<>(genericServerException.getClass().getSimpleName(), genericServerException.getMessage());
     }
@@ -89,17 +90,20 @@ public class ServerEndpoints {
 
         logger.debug("Successfully generated game state for game ID: {} with ID: {}",
                 gameID.getUniqueGameID(), gameState.getGameStateId());
+        logger.trace("Game state: {}", gameState.getPlayers());
         return new ResponseEnvelope<>(gameState);
     }
 
-//
-//	@RequestMapping(value = "/{gameID}/halfmaps", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
-//	public @ResponseBody ResponseEnvelope<?> receiveMap(@Validated @PathVariable UniqueGameIdentifier gameID,
-//			@Validated @RequestBody PlayerHalfMap playerHalfMap) {
-//
-//		final ServerMap map = EndpointInputDataProcessing.createServerMapFromPlayerHalfMap(gameManager.getGames(), gameID, playerHalfMap);
-//		gameManager.saveHalfMap(gameID, map, playerHalfMap.getUniquePlayerID());
-//
-//		return new ResponseEnvelope<>();
-//	}
+
+    @RequestMapping(value = "/{gameID}/halfmaps", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
+    public @ResponseBody ResponseEnvelope<?> receiveMap(@Validated @PathVariable UniqueGameIdentifier gameID,
+                                                        @Validated @RequestBody PlayerHalfMap playerHalfMap) {
+        logger.info("Received half map submission for game ID: {} from player ID: {}", gameID.getUniqueGameID(),
+                playerHalfMap.getUniquePlayerID());
+
+        gameService.submitHalfMap(gameID, playerHalfMap);
+
+        logger.debug("Successfully accepted half map for game ID: {}", gameID.getUniqueGameID());
+        return new ResponseEnvelope<>();
+    }
 }
