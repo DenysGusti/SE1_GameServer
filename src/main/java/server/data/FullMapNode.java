@@ -1,6 +1,6 @@
-package server.data.fromserver;
+package server.data;
 
-import server.data.ETerrain;
+import messagesbase.messagesfromclient.ETerrain;
 
 public record FullMapNode(ETerrain terrain, boolean isRevealed) {
     public FullMapNode {

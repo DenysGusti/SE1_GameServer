@@ -1,6 +1,6 @@
-package server.data.fromclient;
+package server.data;
 
-import server.data.ETerrain;
+import messagesbase.messagesfromclient.ETerrain;
 import server.data.XYPair;
 
 import java.util.Map;
