@@ -1,4 +1,4 @@
-package server.exceptions;
+package server.exception;
 
 import java.util.Objects;
 

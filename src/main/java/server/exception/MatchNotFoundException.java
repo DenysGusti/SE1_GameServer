@@ -1,4 +1,4 @@
-package server.exceptions;
+package server.exception;
 
 public class MatchNotFoundException extends GenericServerException {
     public MatchNotFoundException(String gameId) {

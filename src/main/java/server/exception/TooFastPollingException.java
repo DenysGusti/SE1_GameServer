@@ -1,4 +1,4 @@
-package server.exceptions;
+package server.exception;
 
 public class TooFastPollingException extends GenericServerException {
     public TooFastPollingException() {

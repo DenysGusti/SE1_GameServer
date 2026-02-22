@@ -1,4 +1,4 @@
-package server.exceptions;
+package server.exception;
 
 public class UnknownUAccountException extends GenericServerException {
     public UnknownUAccountException(String uAccount) {

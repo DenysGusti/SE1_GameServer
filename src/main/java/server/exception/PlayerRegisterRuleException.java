@@ -1,4 +1,4 @@
-package server.exceptions;
+package server.exception;
 
 public class PlayerRegisterRuleException extends GenericServerException {
     public PlayerRegisterRuleException() {

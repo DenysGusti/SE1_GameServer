@@ -1,4 +1,4 @@
-package server.exceptions;
+package server.exception;
 
 public class PlayerUnknownException extends GenericServerException {
     public PlayerUnknownException(String gameId, String playerId) {
