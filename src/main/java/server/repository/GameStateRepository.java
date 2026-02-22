@@ -1,8 +1,8 @@
-package server.repositories;
+package server.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
-import server.entities.GameStateEntity;
+import server.entity.GameStateEntity;
 
 import java.util.Optional;
 
