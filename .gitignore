@@ -7,4 +7,7 @@ build
 bin
 out
 *.log
-se.sqlite
+
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
