@@ -10,7 +10,7 @@ import java.util.List;
 public interface PlayerParticipationRepository extends JpaRepository<PlayerParticipationEntity, String> {
     long countByGameId(String gameId);
 
-    long countByPlayer_uAccount(String uAccount);
+    long countByPlayerRegistration_uAccount(String uAccount);
 
     List<PlayerParticipationEntity> findByGameId(String gameId);
 

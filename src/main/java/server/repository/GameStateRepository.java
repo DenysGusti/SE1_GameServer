@@ -9,5 +9,5 @@ import java.util.Optional;
 @Repository
 public interface GameStateRepository extends JpaRepository<GameStateEntity, String> {
 
-    Optional<GameStateEntity> findFirstByGameIdOrderByCurrentRoundDesc(String gameId);
+    Optional<GameStateEntity> findFirstByGameIdOrderByNrDesc(String gameId);
 }
