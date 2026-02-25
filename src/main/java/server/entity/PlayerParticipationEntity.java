@@ -1,13 +1,9 @@
 package server.entity;
 
 import jakarta.persistence.*;
-import messagesbase.messagesfromclient.EMove;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
-import server.data.XYPair;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -23,57 +19,42 @@ public class PlayerParticipationEntity {
     @Column(nullable = false, unique = true, updatable = false)
     private String fakePlayerId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "u_account", nullable = false)
-    private PlayerEntity player;
+    @Column(nullable = false, updatable = false)
+    private boolean firstTurn;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "game_id", nullable = false)
+    @JoinColumn(name = "uAccount", nullable = false)
+    private PlayerRegistrationEntity playerRegistration;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "gameId", nullable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private GameEntity game;
 
-    @OneToMany(mappedBy = "participation", cascade = CascadeType.ALL, orphanRemoval = true)
-    private final List<HalfMapNodeEntity> halfMapNodes = new ArrayList<>();
+    @OneToOne(mappedBy = "playerParticipation", fetch = FetchType.EAGER, cascade = CascadeType.ALL, orphanRemoval = true)
+    private PlayerFullMapEntity playerFullMap;
 
-    private LocalDateTime lastQueryAt;
+    @OneToMany(mappedBy = "playerParticipation", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CommandTimeEntity> commandTimes;
 
-    private LocalDateTime lastCommandAt;
-
-    private boolean firstTurn;
-
-    private Integer fortX;
-    private Integer fortY;
-    private Integer treasureX;
-    private Integer treasureY;
-
-    @Enumerated(EnumType.STRING)
-    private EMove pendingMoveDirection;
-
-    private Integer pendingMoveCount;
+    @OneToMany(mappedBy = "playerParticipation", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<QueryTimeEntity> queryTimes;
 
     protected PlayerParticipationEntity() {
     }
 
-    public PlayerParticipationEntity(String fakePlayerId, PlayerEntity player, GameEntity game, boolean firstTurn) {
+    public PlayerParticipationEntity(String fakePlayerId, PlayerRegistrationEntity playerRegistration, GameEntity game, boolean firstTurn) {
         if (fakePlayerId == null)
             throw new IllegalArgumentException("fakePlayerId is null");
-        if (player == null)
-            throw new IllegalArgumentException("player is null");
+        if (playerRegistration == null)
+            throw new IllegalArgumentException("playerRegistration is null");
         if (game == null)
             throw new IllegalArgumentException("game is null");
 
         this.fakePlayerId = fakePlayerId;
-        this.player = player;
+        this.playerRegistration = playerRegistration;
         this.game = game;
         this.firstTurn = firstTurn;
-    }
-
-    public void updateLastQueryAt() {
-        lastQueryAt = LocalDateTime.now();
-    }
-
-    public void updateLastCommandAt() {
-        lastCommandAt = LocalDateTime.now();
     }
 
     public String getPlayerId() {
@@ -84,93 +65,27 @@ public class PlayerParticipationEntity {
         return fakePlayerId;
     }
 
-    public PlayerEntity getPlayer() {
-        return player;
-    }
+    public String getDisplayPlayerIdFor(String userPlayerId) {
+        if (userPlayerId == null)
+            throw new IllegalArgumentException("userPlayerId is null");
 
-    public GameEntity getGame() {
-        return game;
-    }
-
-    public Optional<LocalDateTime> getLastQueryAt() {
-        return Optional.ofNullable(lastQueryAt);
-    }
-
-    public Optional<LocalDateTime> getLastCommandAt() {
-        return Optional.ofNullable(lastCommandAt);
+        return Objects.equals(userPlayerId, playerId) ? playerId : fakePlayerId;
     }
 
     public boolean isFirstTurn() {
         return firstTurn;
     }
 
-    public Integer getFortX() {
-        return fortX;
+    public PlayerRegistrationEntity getPlayerRegistration() {
+        return playerRegistration;
     }
 
-    public Integer getFortY() {
-        return fortY;
+    public GameEntity getGame() {
+        return game;
     }
 
-    public Integer getTreasureX() {
-        return treasureX;
-    }
-
-    public Integer getTreasureY() {
-        return treasureY;
-    }
-
-    public EMove getPendingMoveDirection() {
-        return pendingMoveDirection;
-    }
-
-    public Integer getPendingMoveCount() {
-        return pendingMoveCount;
-    }
-
-    public void setPlayer(PlayerEntity player) {
-        this.player = player;
-    }
-
-    public void setGame(GameEntity game) {
-        this.game = game;
-    }
-
-    public void setFirstTurn(boolean firstTurn) {
-        this.firstTurn = firstTurn;
-    }
-
-    public void setFortLocation(XYPair fortLocation) {
-        if (fortLocation == null)
-            throw new IllegalArgumentException("fortLocation is null");
-
-        fortX = fortLocation.x();
-        fortY = fortLocation.y();
-    }
-
-    public void setTreasureLocation(XYPair treasureLocation) {
-        if (treasureLocation == null)
-            throw new IllegalArgumentException("treasureLocation is null");
-
-        treasureX = treasureLocation.x();
-        treasureY = treasureLocation.y();
-    }
-
-    public void addHalfMapNode(HalfMapNodeEntity node) {
-        if (node == null)
-            throw new IllegalArgumentException("node is null");
-
-        halfMapNodes.add(node);
-    }
-
-    public void setPendingMove(EMove direction, Integer count) {
-        this.pendingMoveDirection = direction;
-        this.pendingMoveCount = count;
-    }
-
-    public void clearPendingMove() {
-        this.pendingMoveDirection = null;
-        this.pendingMoveCount = null;
+    public Optional<PlayerFullMapEntity> getPlayerFullMap() {
+        return Optional.ofNullable(playerFullMap);
     }
 
     @Override

@@ -11,7 +11,7 @@ import java.util.Objects;
 
 @Entity
 @Table(name = "game_states", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"game_id", "currentRound"})
+        @UniqueConstraint(columnNames = {"gameId", "nr"})
 })
 public class GameStateEntity {
     @Id
@@ -20,61 +20,56 @@ public class GameStateEntity {
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "game_id", nullable = false, updatable = false)
+    @JoinColumn(name = "gameId", nullable = false, updatable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private GameEntity game;
 
     @Column(nullable = false, updatable = false)
-    private int currentRound;
+    private int nr;
 
     @Enumerated(EnumType.STRING)
-    private EMove previousMove;
+    @Column(updatable = false)
+    private EMove transitionMove;
 
-    @OneToMany(mappedBy = "gameState", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "gameState", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private final List<PlayerStateEntity> playerStates = new ArrayList<>();
 
     protected GameStateEntity() {
     }
 
-    public GameStateEntity(GameEntity game, int currentRound) {
+    public GameStateEntity(GameEntity game, int nr, EMove transitionMove) {
         if (game == null)
             throw new IllegalArgumentException("game is null");
-        if (currentRound < 0)
-            throw new IllegalArgumentException("currentRound is negative");
+        if (nr < 0)
+            throw new IllegalArgumentException("nr is negative");
 
         this.game = game;
-        this.currentRound = currentRound;
+        this.nr = nr;
+        this.transitionMove = transitionMove;
     }
 
-    public void setPreviousMove(EMove previousMove) {
-        if (previousMove == null)
-            throw new IllegalArgumentException("previousMove is null");
-
-        this.previousMove = previousMove;
-    }
-
-    public void addPlayerState(PlayerStateEntity playerState) {
-        this.playerStates.add(playerState);
+    public GameStateEntity advanceGameState(EMove transitionMove) {
+        return new GameStateEntity(game, nr + 1, transitionMove);
     }
 
     public String getId() {
         return id;
     }
 
+    public int getNr() {
+        return nr;
+    }
+
+    public EMove getTransitionMove() {
+        return transitionMove;
+    }
+
     public GameEntity getGame() {
         return game;
     }
 
-    public int getCurrentRound() {
-        return currentRound;
-    }
-
-    public EMove getPreviousMove() {
-        return previousMove;
-    }
-
     public List<PlayerStateEntity> getPlayerStates() {
-        return playerStates;
+        return List.copyOf(playerStates);
     }
 
     @Override

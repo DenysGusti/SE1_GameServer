@@ -2,25 +2,30 @@ package server.entity;
 
 import jakarta.persistence.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 @Entity
 @Table(name = "players")
-public class PlayerEntity {
+public class PlayerRegistrationEntity {
     @Id
     @Column(nullable = false, unique = true, updatable = false)
     private String uAccount;
 
-    @Column(nullable = false)
+    @Column(nullable = false, updatable = false)
     private String firstName;
 
-    @Column(nullable = false)
+    @Column(nullable = false, updatable = false)
     private String lastName;
 
-    protected PlayerEntity() {
+    @OneToMany(mappedBy = "playerRegistration", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
+    private final List<PlayerParticipationEntity> playerParticipations = new ArrayList<>();
+
+    protected PlayerRegistrationEntity() {
     }
 
-    public PlayerEntity(String uAccount, String firstName, String lastName) {
+    public PlayerRegistrationEntity(String uAccount, String firstName, String lastName) {
         if (uAccount == null)
             throw new IllegalArgumentException("uAccount is null");
         if (firstName == null)
@@ -45,18 +50,8 @@ public class PlayerEntity {
         return lastName;
     }
 
-    public void setFirstName(String firstName) {
-        if (firstName == null)
-            throw new IllegalArgumentException("firstName is null");
-
-        this.firstName = firstName;
-    }
-
-    public void setLastName(String lastName) {
-        if (lastName == null)
-            throw new IllegalArgumentException("lastName is null");
-
-        this.lastName = lastName;
+    public List<PlayerParticipationEntity> getPlayerParticipations() {
+        return List.copyOf(playerParticipations);
     }
 
     @Override
@@ -65,7 +60,7 @@ public class PlayerEntity {
             return true;
         if (o == null || getClass() != o.getClass())
             return false;
-        var that = (PlayerEntity) o;
+        var that = (PlayerRegistrationEntity) o;
         return Objects.equals(uAccount, that.uAccount);
     }
 

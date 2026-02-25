@@ -9,7 +9,7 @@ import java.util.Objects;
 
 @Entity
 @Table(name = "full_map_nodes", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"game_id", "x", "y"})
+        @UniqueConstraint(columnNames = {"gameId", "x", "y"})
 })
 public class FullMapNodeEntity {
     @Id
@@ -18,7 +18,7 @@ public class FullMapNodeEntity {
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "game_id", nullable = false, updatable = false)
+    @JoinColumn(name = "gameId", nullable = false, updatable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private GameEntity game;
 
@@ -49,6 +49,10 @@ public class FullMapNodeEntity {
         this.x = x;
         this.y = y;
         this.terrain = terrain;
+    }
+
+    public String getId() {
+        return id;
     }
 
     public GameEntity getGame() {

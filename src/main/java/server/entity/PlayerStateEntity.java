@@ -6,10 +6,11 @@ import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
 import java.util.Objects;
+import java.util.Optional;
 
 @Entity
 @Table(name = "player_states", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"participation_id", "game_state_id"})
+        @UniqueConstraint(columnNames = {"playerParticipationId", "gameStateId"})
 })
 public class PlayerStateEntity {
     @Id
@@ -18,64 +19,64 @@ public class PlayerStateEntity {
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "participation_id", nullable = false, updatable = false)
+    @JoinColumn(name = "playerParticipationId", nullable = false, updatable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
-    private PlayerParticipationEntity participation;
+    private PlayerParticipationEntity playerParticipation;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "game_state_id", nullable = false, updatable = false)
+    @JoinColumn(name = "gameStateId", nullable = false, updatable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private GameStateEntity gameState;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private EPlayerGameState state;
+    @Column(nullable = false, updatable = false)
+    private EPlayerGameState playerGameState;
 
-    @Column(nullable = false)
-    private boolean foundTreasure;
-
-    private Integer playerX;
-    private Integer playerY;
+    @OneToOne(mappedBy = "playerState", fetch = FetchType.EAGER, cascade = CascadeType.ALL, orphanRemoval = true)
+    private PlayerRoundEntity playerRound;
 
     protected PlayerStateEntity() {
     }
 
-    public PlayerStateEntity(PlayerParticipationEntity participation, GameStateEntity gameState, EPlayerGameState state, boolean foundTreasure) {
-        if (participation == null)
-            throw new IllegalArgumentException("participation is null");
+    public PlayerStateEntity(PlayerParticipationEntity playerParticipation, GameStateEntity gameState, EPlayerGameState playerGameState) {
+        if (playerParticipation == null)
+            throw new IllegalArgumentException("playerParticipation is null");
         if (gameState == null)
             throw new IllegalArgumentException("gameState is null");
-        if (state == null)
-            throw new IllegalArgumentException("state is null");
+        if (playerGameState == null)
+            throw new IllegalArgumentException("playerGameState is null");
 
-        this.participation = participation;
+        this.playerParticipation = playerParticipation;
         this.gameState = gameState;
-        this.state = state;
-        this.foundTreasure = foundTreasure;
+        this.playerGameState = playerGameState;
     }
 
-    public PlayerParticipationEntity getParticipation() {
-        return participation;
+    public PlayerStateEntity advancePlayerState(GameStateEntity gameState) {
+        return switch (playerGameState) {
+            case MustAct -> new PlayerStateEntity(playerParticipation, gameState, EPlayerGameState.MustWait);
+            case MustWait -> new PlayerStateEntity(playerParticipation, gameState, EPlayerGameState.MustAct);
+            default -> throw new IllegalStateException("Invalid player game state: " + playerGameState);
+        };
+    }
+
+    public EPlayerGameState getPlayerGameState() {
+        return playerGameState;
+    }
+
+    public String getId() {
+        return id;
     }
 
     public GameStateEntity getGameState() {
         return gameState;
     }
 
-    public EPlayerGameState getState() {
-        return state;
+    public PlayerParticipationEntity getPlayerParticipation() {
+        return playerParticipation;
     }
 
-    public boolean hasFoundTreasure() {
-        return foundTreasure;
-    }
-
-    public void setState(EPlayerGameState state) {
-        this.state = state;
-    }
-
-    public void setFoundTreasure(boolean foundTreasure) {
-        this.foundTreasure = foundTreasure;
+    public Optional<PlayerRoundEntity> getPlayerRound() {
+        return Optional.ofNullable(playerRound);
     }
 
     @Override

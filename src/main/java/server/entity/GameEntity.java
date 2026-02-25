@@ -17,48 +17,43 @@ public class GameEntity {
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(nullable = false, updatable = false)
     private boolean debugMode;
+
+    @Column(nullable = false, updatable = false)
     private boolean dummyCompetition;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false, updatable = false)
-    private FullMapType fullMapType;
+    private boolean horizontalFullMap;
 
-    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
-    private final List<PlayerParticipationEntity> participations = new ArrayList<>();
+    @Column(nullable = false, updatable = false)
+    private boolean firstPlayerTopOrLeftSide;
 
-    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "game", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private final List<PlayerParticipationEntity> playerParticipations = new ArrayList<>();
+
+    @OneToMany(mappedBy = "game", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private final List<GameStateEntity> gameStates = new ArrayList<>();
 
-    @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "game", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private final List<FullMapNodeEntity> fullMapNodes = new ArrayList<>();
 
     protected GameEntity() {
     }
 
-    public GameEntity(String id, boolean debugMode, boolean dummyCompetition, FullMapType fullMapType) {
+    public GameEntity(String id, boolean debugMode, boolean dummyCompetition, boolean horizontalFullMap,
+                      boolean firstPlayerTopOrLeftSide, LocalDateTime createdAt) {
         if (id == null)
             throw new IllegalArgumentException("id is null");
-        if (fullMapType == null)
-            throw new IllegalArgumentException("fullMapType is null");
+        if (createdAt == null)
+            throw new IllegalArgumentException("createdAt is null");
 
         this.id = id;
         this.debugMode = debugMode;
         this.dummyCompetition = dummyCompetition;
-        this.fullMapType = fullMapType;
-        createdAt = LocalDateTime.now();
-    }
-
-    public void addParticipation(PlayerParticipationEntity participation) {
-        participations.add(participation);
-    }
-
-    public void addGameState(GameStateEntity state) {
-        gameStates.add(state);
-    }
-
-    public void addFullMapNode(FullMapNodeEntity node) {
-        fullMapNodes.add(node);
+        this.horizontalFullMap = horizontalFullMap;
+        this.firstPlayerTopOrLeftSide = firstPlayerTopOrLeftSide;
+        this.createdAt = createdAt;
     }
 
     public String getId() {
@@ -77,32 +72,24 @@ public class GameEntity {
         return dummyCompetition;
     }
 
-    public FullMapType getFullMapType() {
-        return fullMapType;
+    public boolean hasHorizontalFullMap() {
+        return horizontalFullMap;
     }
 
-    public List<PlayerParticipationEntity> getParticipations() {
-        return participations;
+    public boolean hasFirstPlayerTopOrLeftSide() {
+        return firstPlayerTopOrLeftSide;
+    }
+
+    public List<PlayerParticipationEntity> getPlayerParticipations() {
+        return List.copyOf(playerParticipations);
     }
 
     public List<GameStateEntity> getGameStates() {
-        return gameStates;
+        return List.copyOf(gameStates);
     }
 
     public List<FullMapNodeEntity> getFullMapNodes() {
-        return fullMapNodes;
-    }
-
-    public void setDebugMode(boolean debugMode) {
-        this.debugMode = debugMode;
-    }
-
-    public void setDummyCompetition(boolean dummyCompetition) {
-        this.dummyCompetition = dummyCompetition;
-    }
-
-    public void setFullMapType(FullMapType fullMapType) {
-        this.fullMapType = fullMapType;
+        return List.copyOf(fullMapNodes);
     }
 
     @Override
