@@ -22,64 +22,98 @@ import server.validation.Notification;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.random.RandomGenerator;
 
 @Service
 public class GameService {
     private static final Logger logger = LoggerFactory.getLogger(GameService.class);
+
     private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int GAME_ID_LENGTH = 5;
+
     private static final int MAX_GAMES = 5;
-    private static final int GAME_LIFETIME_MINUTES = 1;
     private static final int PLAYERS_PER_GAME = 2;
-    private static final int MAX_GAMES_PER_PLAYER = 3;
-    private static final Duration MINIMUM_POLLING_INTERVAL = Duration.ofMillis(300);
-    private static final Duration MAXIMUM_ACTION_INTERVAL = Duration.ofSeconds(5);
+    private static final int MAX_GAMES_PER_PLAYER = 10;
+
+    private static final Duration GAME_LIFETIME = Duration.ofMinutes(3);
+    //    private static final Duration MINIMUM_POLLING_INTERVAL = Duration.ofMillis(300);
+    private static final Duration MAXIMUM_ACTION_INTERVAL = Duration.ofMillis(5500);
 
     private final RandomGenerator randomGenerator;
     private final HalfMapValidator halfMapValidator;
     private final HalfMapConverter halfMapConverter;
-    private final GameRepository gameRepository;
-    private final PlayerRepository playerRepository;
-    private final PlayerParticipationRepository playerParticipationRepository;
-    private final GameStateRepository gameStateRepository;
 
-    public GameService(RandomGenerator randomGenerator, HalfMapValidator halfMapValidator,
-                       HalfMapConverter halfMapConverter, GameRepository gameRepository,
-                       PlayerRepository playerRepository, PlayerParticipationRepository playerParticipationRepository,
-                       GameStateRepository gameStateRepository) {
+    private final CommandTimeRepository commandTimeRepository;
+    private final FullMapNodeRepository fullMapNodeRepository;
+    private final GameRepository gameRepository;
+    private final GameStateRepository gameStateRepository;
+    private final PlayerFullMapRepository playerFullMapRepository;
+    private final PlayerParticipationRepository playerParticipationRepository;
+    private final PlayerRegistrationRepository playerRegistrationRepository;
+    private final PlayerRoundRepository playerRoundRepository;
+    private final PlayerStateRepository playerStateRepository;
+    private final QueryTimeRepository queryTimeRepository;
+
+    public GameService(RandomGenerator randomGenerator,
+                       HalfMapValidator halfMapValidator,
+                       HalfMapConverter halfMapConverter,
+                       CommandTimeRepository commandTimeRepository,
+                       FullMapNodeRepository fullMapNodeRepository,
+                       GameRepository gameRepository,
+                       GameStateRepository gameStateRepository,
+                       PlayerFullMapRepository playerFullMapRepository,
+                       PlayerParticipationRepository playerParticipationRepository,
+                       PlayerRegistrationRepository playerRegistrationRepository,
+                       PlayerRoundRepository playerRoundRepository,
+                       PlayerStateRepository playerStateRepository,
+                       QueryTimeRepository queryTimeRepository
+    ) {
         if (randomGenerator == null)
             throw new IllegalArgumentException("randomGenerator is null");
         if (halfMapValidator == null)
             throw new IllegalArgumentException("halfMapValidator is null");
         if (halfMapConverter == null)
             throw new IllegalArgumentException("halfMapConverter is null");
+        if (commandTimeRepository == null)
+            throw new IllegalArgumentException("commandTimeRepository is null");
+        if (fullMapNodeRepository == null)
+            throw new IllegalArgumentException("fullMapNodeRepository is null");
         if (gameRepository == null)
             throw new IllegalArgumentException("gameRepository is null");
-        if (playerRepository == null)
-            throw new IllegalArgumentException("playerRepository is null");
-        if (playerParticipationRepository == null)
-            throw new IllegalArgumentException("playerParticipationRepository is null");
         if (gameStateRepository == null)
             throw new IllegalArgumentException("gameStateRepository is null");
+        if (playerFullMapRepository == null)
+            throw new IllegalArgumentException("playerFullMapRepository is null");
+        if (playerParticipationRepository == null)
+            throw new IllegalArgumentException("playerParticipationRepository is null");
+        if (playerRegistrationRepository == null)
+            throw new IllegalArgumentException("playerRegistrationRepository is null");
+        if (playerRoundRepository == null)
+            throw new IllegalArgumentException("playerRoundRepository is null");
+        if (playerStateRepository == null)
+            throw new IllegalArgumentException("playerStateRepository is null");
+        if (queryTimeRepository == null)
+            throw new IllegalArgumentException("queryTimeRepository is null");
 
-        this.gameRepository = gameRepository;
-        this.halfMapValidator = halfMapValidator;
         this.randomGenerator = randomGenerator;
+        this.halfMapValidator = halfMapValidator;
         this.halfMapConverter = halfMapConverter;
-        this.playerRepository = playerRepository;
-        this.playerParticipationRepository = playerParticipationRepository;
+        this.commandTimeRepository = commandTimeRepository;
+        this.fullMapNodeRepository = fullMapNodeRepository;
+        this.gameRepository = gameRepository;
         this.gameStateRepository = gameStateRepository;
+        this.playerFullMapRepository = playerFullMapRepository;
+        this.playerParticipationRepository = playerParticipationRepository;
+        this.playerRegistrationRepository = playerRegistrationRepository;
+        this.playerRoundRepository = playerRoundRepository;
+        this.playerStateRepository = playerStateRepository;
+        this.queryTimeRepository = queryTimeRepository;
     }
 
     @Transactional
     public UniqueGameIdentifier createGame(boolean debugMode, boolean dummyCompetition) {
         String newGameId;
-
         do {
             var sb = new StringBuilder(GAME_ID_LENGTH);
             for (int i = 0; i < GAME_ID_LENGTH; ++i)
@@ -88,9 +122,10 @@ public class GameService {
             newGameId = sb.toString();
         } while (gameRepository.existsById(newGameId));
 
-        FullMapType fullMapType = randomGenerator.nextBoolean() ? FullMapType.Horizontal : FullMapType.Vertical;
+        boolean horizontalFullMap = randomGenerator.nextBoolean();
+        boolean firstPlayerTopOrLeftSide = randomGenerator.nextBoolean();
 
-        var game = new GameEntity(newGameId, debugMode, dummyCompetition, fullMapType);
+        var game = new GameEntity(newGameId, debugMode, dummyCompetition, horizontalFullMap, firstPlayerTopOrLeftSide, LocalDateTime.now());
         gameRepository.save(game);
 
         return new UniqueGameIdentifier(newGameId);
@@ -98,7 +133,7 @@ public class GameService {
 
     @Transactional
     public void removeOldGames() {
-        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(GAME_LIFETIME_MINUTES);
+        LocalDateTime tenMinutesAgo = LocalDateTime.now().minus(GAME_LIFETIME);
         gameRepository.deleteByCreatedAtBefore(tenMinutesAgo);
 
         long totalGames = gameRepository.count();
@@ -114,7 +149,7 @@ public class GameService {
             }
         }
 
-        playerRepository.deleteOrphanedPlayers();
+        playerRegistrationRepository.deleteOrphanedPlayerRegistrations();
     }
 
     @Transactional
@@ -127,7 +162,7 @@ public class GameService {
 
         String uAccount = playerRegistration.getStudentUAccount();
         // optional to restrict players
-        if (!playerRepository.existsById(uAccount)) {
+        if (!playerRegistrationRepository.existsById(uAccount)) {
             logger.info("New player tried to join game with unknown uAccount: {}", uAccount);
 //            throw new UnknownUAccountException(uAccount);
         }
@@ -140,28 +175,25 @@ public class GameService {
         if (currentPlayers >= PLAYERS_PER_GAME)
             throw new PlayerRegisterRuleException();
 
-        long activeGamesForPlayer = playerParticipationRepository.countByPlayer_uAccount(uAccount);
+        long activeGamesForPlayer = playerParticipationRepository.countByPlayerRegistration_uAccount(uAccount);
         if (activeGamesForPlayer >= MAX_GAMES_PER_PLAYER)
             throw new ManualGameCreationOveruseException();
 
-        var player = playerRepository.findById(uAccount)
-                .orElseGet(() -> new PlayerEntity(
+        var player = playerRegistrationRepository.findById(uAccount)
+                .orElseGet(() -> new PlayerRegistrationEntity(
                         uAccount,
                         playerRegistration.getStudentFirstName(),
                         playerRegistration.getStudentLastName()
                 ));
+        player = playerRegistrationRepository.save(player);
 
-        player.setFirstName(playerRegistration.getStudentFirstName());
-        player.setLastName(playerRegistration.getStudentLastName());
-        player = playerRepository.save(player);
-
-        boolean isFirstTurn;
+        boolean isEvenTurn;
         PlayerParticipationEntity firstPlayerParticipation = null;
         if (currentPlayers == 0)
-            isFirstTurn = randomGenerator.nextBoolean();
+            isEvenTurn = randomGenerator.nextBoolean();
         else {
             firstPlayerParticipation = playerParticipationRepository.findByGameId(gameId).getFirst();
-            isFirstTurn = !firstPlayerParticipation.isFirstTurn();
+            isEvenTurn = !firstPlayerParticipation.isFirstTurn();
         }
 
         String fakePlayerId;
@@ -170,55 +202,51 @@ public class GameService {
         } while (playerParticipationRepository.existsById(fakePlayerId) ||
                 playerParticipationRepository.existsByFakePlayerId(fakePlayerId));
 
-        var playerParticipation = new PlayerParticipationEntity(fakePlayerId, player, game, isFirstTurn);
+        var playerParticipation = new PlayerParticipationEntity(fakePlayerId, player, game, isEvenTurn);
         playerParticipation = playerParticipationRepository.save(playerParticipation);
 
-        GameStateEntity newGameState;
         if (currentPlayers == 0)
-            newGameState = createFirstGameState(playerParticipation, game);
+            createFirstGameState(playerParticipation, game);
         else
-            newGameState = createSecondGameState(firstPlayerParticipation, playerParticipation, game);
-        gameStateRepository.save(newGameState);
-
-        if (currentPlayers != 0) {
-            if (firstPlayerParticipation.isFirstTurn())
-                firstPlayerParticipation.updateLastCommandAt();
-            else
-                playerParticipation.updateLastCommandAt();
-        }
+            createSecondGameState(firstPlayerParticipation, playerParticipation, game);
 
         return new UniquePlayerIdentifier(playerParticipation.getPlayerId());
     }
 
-    @NonNull
-    private static GameStateEntity createFirstGameState(PlayerParticipationEntity firstPlayerParticipation,
-                                                        GameEntity game) {
-        var newGameState = new GameStateEntity(game, 0);
-        var firstPlayerState =
-                new PlayerStateEntity(firstPlayerParticipation, newGameState, EPlayerGameState.MustWait, false);
+    private void createFirstGameState(PlayerParticipationEntity playerParticipation, GameEntity game) {
+        var gameState = new GameStateEntity(game, 0, null);
+        gameStateRepository.save(gameState);
 
-        newGameState.addPlayerState(firstPlayerState);
-        return newGameState;
+        var playerState = new PlayerStateEntity(playerParticipation, gameState, EPlayerGameState.MustWait);
+        playerStateRepository.save(playerState);
+        logger.info("test: {} -> {}", playerState, playerState.getPlayerRound());
     }
 
-    @NonNull
-    private static GameStateEntity createSecondGameState(PlayerParticipationEntity firstPlayerParticipation,
-                                                         PlayerParticipationEntity secondPlayerParticipation,
-                                                         GameEntity game) {
-        EPlayerGameState firstPlayerStateEnum = firstPlayerParticipation.isFirstTurn() ?
-                EPlayerGameState.MustAct : EPlayerGameState.MustWait;
-        EPlayerGameState secondPlayerStateEnum = secondPlayerParticipation.isFirstTurn() ?
-                EPlayerGameState.MustAct : EPlayerGameState.MustWait;
+    private void createSecondGameState(PlayerParticipationEntity playerOne, PlayerParticipationEntity playerTwo,
+                                       GameEntity game) {
+        EPlayerGameState playerOneGameState;
+        EPlayerGameState playerTwoGameState;
+        CommandTimeEntity commandTime;
+        if (playerOne.isFirstTurn()) {
+            playerOneGameState = EPlayerGameState.MustAct;
+            playerTwoGameState = EPlayerGameState.MustWait;
+            commandTime = new CommandTimeEntity(playerOne, LocalDateTime.now());
+        } else {
+            playerOneGameState = EPlayerGameState.MustWait;
+            playerTwoGameState = EPlayerGameState.MustAct;
+            commandTime = new CommandTimeEntity(playerTwo, LocalDateTime.now());
+        }
+        commandTimeRepository.save(commandTime);
 
-        var newGameState = new GameStateEntity(game, 1);
-        var firstPlayerState =
-                new PlayerStateEntity(firstPlayerParticipation, newGameState, firstPlayerStateEnum, false);
-        var secondPlayerState =
-                new PlayerStateEntity(secondPlayerParticipation, newGameState, secondPlayerStateEnum, false);
+        GameStateEntity gameState = gameStateRepository.findFirstByGameIdOrderByNrDesc(game.getId())
+                .orElseThrow(() -> new IllegalStateException("No game state exists yet."))
+                .advanceGameState(null);
+        gameStateRepository.save(gameState);
 
-        newGameState.addPlayerState(firstPlayerState);
-        newGameState.addPlayerState(secondPlayerState);
-        return newGameState;
+        var playerOneState = new PlayerStateEntity(playerOne, gameState, playerOneGameState);
+        playerStateRepository.save(playerOneState);
+        var playerTwoState = new PlayerStateEntity(playerTwo, gameState, playerTwoGameState);
+        playerStateRepository.save(playerTwoState);
     }
 
     @NonNull
@@ -245,42 +273,29 @@ public class GameService {
 
     @Transactional
     public GameState getGameState(UniqueGameIdentifier uniqueGameIdentifier, UniquePlayerIdentifier uniquePlayerIdentifier) {
-        PlayerParticipationEntity requestingPlayer = getPlayerParticipation(uniqueGameIdentifier, uniquePlayerIdentifier);
-
-        LocalDateTime now = LocalDateTime.now();
-        requestingPlayer.getLastQueryAt().ifPresent(lastQuery -> {
-            long millisSinceLastQuery = ChronoUnit.MILLIS.between(lastQuery, now);
-            if (millisSinceLastQuery < MINIMUM_POLLING_INTERVAL.toMillis()) {
-                logger.warn("Player {} polling too frequently: {} ms",
-                        requestingPlayer.getPlayer().getUAccount(), millisSinceLastQuery);
-                throw new TooFastPollingException();
-            }
-        });
-
-        requestingPlayer.updateLastQueryAt();
-        playerParticipationRepository.save(requestingPlayer);
+        PlayerParticipationEntity playerParticipation = getPlayerParticipation(uniqueGameIdentifier, uniquePlayerIdentifier);
+        queryTimeRepository.save(new QueryTimeEntity(playerParticipation, LocalDateTime.now()));
 
         GameStateEntity latestGameState =
-                gameStateRepository.findFirstByGameIdOrderByCurrentRoundDesc(uniqueGameIdentifier.getUniqueGameID())
+                gameStateRepository.findFirstByGameIdOrderByNrDesc(uniqueGameIdentifier.getUniqueGameID())
                         .orElseThrow(() -> new IllegalStateException("No game state exists yet."));
 
         Set<PlayerState> playerStates = new HashSet<>();
 
         for (PlayerStateEntity dbPlayerState : latestGameState.getPlayerStates()) {
-            PlayerParticipationEntity playerParticipation = dbPlayerState.getParticipation();
-            var displayPlayerId = playerParticipation.getPlayerId().equals(uniquePlayerIdentifier.getUniquePlayerID()) ?
-                    new UniquePlayerIdentifier(playerParticipation.getPlayerId()) :
-                    new UniquePlayerIdentifier(playerParticipation.getFakePlayerId());
+            PlayerParticipationEntity dbPlayerParticipation = dbPlayerState.getPlayerParticipation();
+            String displayPlayerId =
+                    dbPlayerParticipation.getDisplayPlayerIdFor(uniquePlayerIdentifier.getUniquePlayerID());
 
-            PlayerEntity player = playerParticipation.getPlayer();
+            PlayerRegistrationEntity playerRegistration = dbPlayerParticipation.getPlayerRegistration();
 
             var playerState = new PlayerState(
-                    player.getFirstName(),
-                    player.getLastName(),
-                    player.getUAccount(),
-                    dbPlayerState.getState(),
-                    displayPlayerId,
-                    dbPlayerState.hasFoundTreasure()
+                    playerRegistration.getFirstName(),
+                    playerRegistration.getLastName(),
+                    playerRegistration.getUAccount(),
+                    dbPlayerState.getPlayerGameState(),
+                    new UniquePlayerIdentifier(displayPlayerId),
+                    dbPlayerState.getPlayerRound().map(PlayerRoundEntity::hasCollectedTreasure).orElse(false)
             );
             playerStates.add(playerState);
         }
@@ -290,32 +305,32 @@ public class GameService {
 
     @Transactional
     public void submitHalfMap(UniqueGameIdentifier uniqueGameIdentifier, PlayerHalfMap playerHalfMap) {
-        PlayerParticipationEntity player = getPlayerParticipation(uniqueGameIdentifier, playerHalfMap);
+        PlayerParticipationEntity playerParticipation = getPlayerParticipation(uniqueGameIdentifier, playerHalfMap);
 
-        GameEntity game = player.getGame();
+        GameEntity game = playerParticipation.getGame();
         if (!game.isDebugMode()) {
-            LocalDateTime now = LocalDateTime.now();
-            LocalDateTime lastCommandAt = player.getLastCommandAt()
+            CommandTimeEntity commandTime = commandTimeRepository
+                    .findFirstByPlayerParticipation_PlayerIdOrderByCommandAtDesc(playerParticipation.getPlayerId())
                     .orElseThrow(() -> new IllegalStateException("No last command time recorded."));
 
-            long millisSinceLastCommand = ChronoUnit.MILLIS.between(lastCommandAt, now);
+            long millisSinceLastCommand = ChronoUnit.MILLIS.between(commandTime.getCommandAt(), LocalDateTime.now());
             if (millisSinceLastCommand > MAXIMUM_ACTION_INTERVAL.toMillis()) {
                 logger.warn("Player {} submitting half map too infrequently: {} ms",
-                        player.getPlayer().getUAccount(), millisSinceLastCommand);
+                        playerParticipation.getPlayerRegistration().getUAccount(), millisSinceLastCommand);
                 throw new TooSlowActionException();
             }
         }
-        player.updateLastCommandAt();
-        playerParticipationRepository.save(player);
+        var commandTime = new CommandTimeEntity(playerParticipation, LocalDateTime.now());
+        commandTimeRepository.save(commandTime);
 
-        GameStateEntity latestGameState = gameStateRepository.findFirstByGameIdOrderByCurrentRoundDesc(game.getId())
+        GameStateEntity latestGameState = gameStateRepository.findFirstByGameIdOrderByNrDesc(game.getId())
                 .orElseThrow(() -> new IllegalStateException("No game state exists yet."));
 
         PlayerStateEntity currentPlayerState = latestGameState.getPlayerStates().stream()
-                .filter(ps -> ps.getParticipation().getPlayerId().equals(player.getPlayerId()))
+                .filter(ps -> ps.getPlayerParticipation().getPlayerId().equals(playerParticipation.getPlayerId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Player not found in game state."));
-        if (currentPlayerState.getState() != EPlayerGameState.MustAct)
+        if (currentPlayerState.getPlayerGameState() != EPlayerGameState.MustAct)
             throw new PlayerTurnException();
 
         HalfMap halfMap = halfMapConverter.convertHalfMap(playerHalfMap);
@@ -327,24 +342,14 @@ public class GameService {
                 .skip(randomGenerator.nextInt(halfMap.potentialForts().size()))
                 .findFirst()
                 .orElseThrow();
-        player.setFortLocation(fortLocation);
-
         List<XYPair> potentialTreasures = halfMap.nodes().entrySet().stream()
                 .filter(entry -> entry.getValue() == ETerrain.Grass)
                 .filter(entry -> !fortLocation.equals(entry.getKey()))
                 .map(Map.Entry::getKey)
                 .toList();
         XYPair treasureLocation = potentialTreasures.get(randomGenerator.nextInt(potentialTreasures.size()));
-        player.setTreasureLocation(treasureLocation);
-
-        halfMap.nodes().forEach((coordinate, terrain) -> {
-            var node = new HalfMapNodeEntity(player, coordinate.x(), coordinate.y(), terrain,
-                    fortLocation.equals(coordinate));
-            player.addHalfMapNode(node);
-        });
-
-        playerParticipationRepository.save(player);
-
-        var newGameState = new GameStateEntity(game, latestGameState.getCurrentRound() + 1);
+        var playerFullMap =
+                new PlayerFullMapEntity(playerParticipation, fortLocation.x(), fortLocation.y(), treasureLocation.x(), treasureLocation.y());
+        playerFullMapRepository.save(playerFullMap);
     }
 }

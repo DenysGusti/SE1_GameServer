@@ -94,7 +94,6 @@ public class ServerEndpoints {
         return new ResponseEnvelope<>(gameState);
     }
 
-
     @RequestMapping(value = "/{gameID}/halfmaps", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
     public @ResponseBody ResponseEnvelope<?> receiveMap(@Validated @PathVariable UniqueGameIdentifier gameID,
                                                         @Validated @RequestBody PlayerHalfMap playerHalfMap) {
