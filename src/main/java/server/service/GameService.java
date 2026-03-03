@@ -26,6 +26,7 @@ import java.util.*;
 import java.util.random.RandomGenerator;
 
 @Service
+@Transactional(noRollbackFor = {GenericServerException.class})
 public class GameService {
     private static final Logger logger = LoggerFactory.getLogger(GameService.class);
 
@@ -35,6 +36,10 @@ public class GameService {
     private static final int MAX_GAMES = 5;
     private static final int PLAYERS_PER_GAME = 2;
     private static final int MAX_GAMES_PER_PLAYER = 10;
+    private static final int HALF_MAP_NODES = 50;
+    private static final int FULL_MAP_NODES = 100;
+
+    private static final XYPair HALF_MAP_SIZE = new XYPair(10, 5);
 
     private static final Duration GAME_LIFETIME = Duration.ofMinutes(3);
     //    private static final Duration MINIMUM_POLLING_INTERVAL = Duration.ofMillis(300);
@@ -111,7 +116,6 @@ public class GameService {
         this.queryTimeRepository = queryTimeRepository;
     }
 
-    @Transactional
     public UniqueGameIdentifier createGame(boolean debugMode, boolean dummyCompetition) {
         String newGameId;
         do {
@@ -131,7 +135,6 @@ public class GameService {
         return new UniqueGameIdentifier(newGameId);
     }
 
-    @Transactional
     public void removeOldGames() {
         LocalDateTime tenMinutesAgo = LocalDateTime.now().minus(GAME_LIFETIME);
         gameRepository.deleteByCreatedAtBefore(tenMinutesAgo);
@@ -152,7 +155,6 @@ public class GameService {
         playerRegistrationRepository.deleteOrphanedPlayerRegistrations();
     }
 
-    @Transactional
     public UniquePlayerIdentifier registerPlayer(UniqueGameIdentifier uniqueGameIdentifier,
                                                  PlayerRegistration playerRegistration) {
         if (playerRegistration == null)
@@ -198,7 +200,7 @@ public class GameService {
 
         String fakePlayerId;
         do {
-            fakePlayerId = java.util.UUID.randomUUID().toString();
+            fakePlayerId = UUID.randomUUID().toString();
         } while (playerParticipationRepository.existsById(fakePlayerId) ||
                 playerParticipationRepository.existsByFakePlayerId(fakePlayerId));
 
@@ -271,7 +273,6 @@ public class GameService {
         return playerParticipation;
     }
 
-    @Transactional
     public GameState getGameState(UniqueGameIdentifier uniqueGameIdentifier, UniquePlayerIdentifier uniquePlayerIdentifier) {
         PlayerParticipationEntity playerParticipation = getPlayerParticipation(uniqueGameIdentifier, uniquePlayerIdentifier);
         queryTimeRepository.save(new QueryTimeEntity(playerParticipation, LocalDateTime.now()));
@@ -300,56 +301,230 @@ public class GameService {
             playerStates.add(playerState);
         }
 
-        return new GameState(playerStates, latestGameState.getId());
+        Optional<PlayerStateEntity> myPlayerState = latestGameState.getPlayerStates().stream()
+                .filter(ps -> ps.getPlayerParticipation().getPlayerId().equals(playerParticipation.getPlayerId()))
+                .findFirst();
+        Optional<PlayerStateEntity> enemyPlayerState = latestGameState.getPlayerStates().stream()
+                .filter(ps -> !ps.getPlayerParticipation().getPlayerId().equals(playerParticipation.getPlayerId()))
+                .findFirst();
+
+        Optional<PlayerRoundEntity> myPlayerPlayerRound = myPlayerState.flatMap(PlayerStateEntity::getPlayerRound);
+        Optional<PlayerFullMapEntity> myPlayerFullMap = myPlayerState.flatMap(ps -> ps.getPlayerParticipation().getPlayerFullMap());
+
+        Optional<PlayerRoundEntity> enemyPlayerPlayerRound = enemyPlayerState.flatMap(PlayerStateEntity::getPlayerRound);
+        Optional<PlayerFullMapEntity> enemyPlayerFullMap = enemyPlayerState.flatMap(ps -> ps.getPlayerParticipation().getPlayerFullMap());
+
+        boolean hasMe = myPlayerPlayerRound.isPresent() && myPlayerFullMap.isPresent();
+        boolean hasEnemy = enemyPlayerPlayerRound.isPresent() && enemyPlayerFullMap.isPresent();
+
+        if (!hasMe && !hasEnemy)
+            return new GameState(playerStates, latestGameState.getId());
+
+        XYPair my;
+        XYPair myFort;
+        XYPair myTreasure;
+        int fowRadius;
+        if (hasMe) {
+            my = new XYPair(myPlayerPlayerRound.orElseThrow().getPlayerX(), myPlayerPlayerRound.orElseThrow().getPlayerY());
+            myFort = new XYPair(myPlayerFullMap.orElseThrow().getFortX(), myPlayerFullMap.orElseThrow().getFortY());
+            myTreasure = new XYPair(myPlayerFullMap.orElseThrow().getTreasureX(), myPlayerFullMap.orElseThrow().getTreasureY());
+
+            boolean amIOnMountain = latestGameState.getGame().getFullMapNodes().stream()
+                    .anyMatch(n -> n.getX() == my.x() && n.getY() == my.y() && n.getTerrain() == ETerrain.Mountain);
+            if (amIOnMountain)
+                fowRadius = 1;
+            else
+                fowRadius = 0;
+        } else {
+            fowRadius = 0;
+            my = null;
+            myFort = null;
+            myTreasure = null;
+        }
+
+        XYPair enemy;
+        XYPair enemyFort;
+        if (hasEnemy) {
+            if (latestGameState.getNr() >= 18)
+                enemy = new XYPair(enemyPlayerPlayerRound.orElseThrow().getPlayerX(), enemyPlayerPlayerRound.orElseThrow().getPlayerY());
+            else {
+                List<FullMapNodeEntity> validFakeTiles = latestGameState.getGame().getFullMapNodes().stream()
+                        .filter(n -> n.getTerrain() != ETerrain.Water)
+                        .toList();
+                int randomIndex = new Random(latestGameState.getNr()).nextInt(validFakeTiles.size());
+                FullMapNodeEntity fakeTile = validFakeTiles.get(randomIndex);
+                enemy = new XYPair(fakeTile.getX(), fakeTile.getY());
+            }
+            enemyFort = new XYPair(enemyPlayerFullMap.orElseThrow().getFortX(), enemyPlayerFullMap.orElseThrow().getFortY());
+        } else {
+            enemy = null;
+            enemyFort = null;
+        }
+
+        List<FullMapNode> fullMapNodes = latestGameState.getGame().getFullMapNodes().stream()
+                .map(fullMapNode -> {
+                    var node = new XYPair(fullMapNode.getX(), fullMapNode.getY());
+
+                    EPlayerPositionState playerPositionState = EPlayerPositionState.NoPlayerPresent;
+                    ETreasureState treasureState = ETreasureState.NoOrUnknownTreasureState;
+                    EFortState fortState = EFortState.NoOrUnknownFortState;
+
+                    boolean isMeHere = hasMe && node.equals(my);
+                    boolean isEnemyHere = hasEnemy && node.equals(enemy);
+
+                    if (isMeHere && isEnemyHere)
+                        playerPositionState = EPlayerPositionState.BothPlayerPosition;
+                    else if (isMeHere)
+                        playerPositionState = EPlayerPositionState.MyPlayerPosition;
+                    else if (isEnemyHere)
+                        playerPositionState = EPlayerPositionState.EnemyPlayerPosition;
+
+                    if (hasMe && hasEnemy) {
+                        if (Math.max(Math.abs(my.x() - node.x()), Math.abs(my.y() - node.y())) <= fowRadius) {
+                            if (node.equals(enemyFort))
+                                fortState = EFortState.EnemyFortPresent;
+                            else if (node.equals(myTreasure))
+                                treasureState = ETreasureState.MyTreasureIsPresent;
+                        }
+                    }
+
+                    if (hasMe && node.equals(myFort))
+                        fortState = EFortState.MyFortPresent;
+
+                    return new FullMapNode(fullMapNode.getTerrain(), playerPositionState, treasureState, fortState, node.x(), node.y());
+                })
+                .toList();
+
+        var fullMap = new FullMap(fullMapNodes);
+
+        return new GameState(fullMap, playerStates, latestGameState.getId());
     }
 
-    @Transactional
+    private void endGame(PlayerParticipationEntity lostPlayerParticipation, EMove move) {
+        GameEntity game = lostPlayerParticipation.getGame();
+        GameStateEntity latestGameState = gameStateRepository.findFirstByGameIdOrderByNrDesc(game.getId())
+                .orElseThrow(() -> new IllegalStateException("No game state exists yet."));
+
+        GameStateEntity newGameState = latestGameState.advanceGameState(move);
+        gameStateRepository.save(newGameState);
+
+        for (PlayerStateEntity playerState : latestGameState.getPlayerStates()) {
+            boolean lost = playerState.getPlayerParticipation().equals(lostPlayerParticipation);
+            PlayerStateEntity newPlayerState = playerState.endPlayerState(newGameState, lost);
+            playerStateRepository.save(newPlayerState);
+        }
+    }
+
+    private void checkCommandTime(PlayerParticipationEntity playerParticipation, EMove move) {
+        CommandTimeEntity commandTime = commandTimeRepository
+                .findFirstByPlayerParticipation_PlayerIdOrderByCommandAtDesc(playerParticipation.getPlayerId())
+                .orElseThrow(() -> new IllegalStateException("No last command time recorded."));
+
+        LocalDateTime now = LocalDateTime.now();
+
+        long millisSinceLastCommand = ChronoUnit.MILLIS.between(commandTime.getCommandAt(), now);
+        if (millisSinceLastCommand > MAXIMUM_ACTION_INTERVAL.toMillis()) {
+            logger.warn("Player {} submitting action too infrequently: {} ms",
+                    playerParticipation.getPlayerRegistration().getUAccount(), millisSinceLastCommand);
+
+            endGame(playerParticipation, move);
+            throw new TooSlowActionException();
+        }
+
+        commandTimeRepository.save(new CommandTimeEntity(playerParticipation, now));
+    }
+
     public void submitHalfMap(UniqueGameIdentifier uniqueGameIdentifier, PlayerHalfMap playerHalfMap) {
         PlayerParticipationEntity playerParticipation = getPlayerParticipation(uniqueGameIdentifier, playerHalfMap);
 
         GameEntity game = playerParticipation.getGame();
-        if (!game.isDebugMode()) {
-            CommandTimeEntity commandTime = commandTimeRepository
-                    .findFirstByPlayerParticipation_PlayerIdOrderByCommandAtDesc(playerParticipation.getPlayerId())
-                    .orElseThrow(() -> new IllegalStateException("No last command time recorded."));
-
-            long millisSinceLastCommand = ChronoUnit.MILLIS.between(commandTime.getCommandAt(), LocalDateTime.now());
-            if (millisSinceLastCommand > MAXIMUM_ACTION_INTERVAL.toMillis()) {
-                logger.warn("Player {} submitting half map too infrequently: {} ms",
-                        playerParticipation.getPlayerRegistration().getUAccount(), millisSinceLastCommand);
-                throw new TooSlowActionException();
-            }
-        }
-        var commandTime = new CommandTimeEntity(playerParticipation, LocalDateTime.now());
-        commandTimeRepository.save(commandTime);
-
         GameStateEntity latestGameState = gameStateRepository.findFirstByGameIdOrderByNrDesc(game.getId())
                 .orElseThrow(() -> new IllegalStateException("No game state exists yet."));
+
+        if (!game.isDebugMode())
+            checkCommandTime(playerParticipation, null);
 
         PlayerStateEntity currentPlayerState = latestGameState.getPlayerStates().stream()
                 .filter(ps -> ps.getPlayerParticipation().getPlayerId().equals(playerParticipation.getPlayerId()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Player not found in game state."));
-        if (currentPlayerState.getPlayerGameState() != EPlayerGameState.MustAct)
+        if (currentPlayerState.getPlayerGameState() != EPlayerGameState.MustAct) {
+            endGame(playerParticipation, null);
             throw new PlayerTurnException();
+        }
+
+        List<FullMapNodeEntity> fullMapNodes = game.getFullMapNodes();
+        if (fullMapNodes.size() == FULL_MAP_NODES)
+            throw new DuplicateHalfMapSubmissionException();
+
+        if (!fullMapNodes.isEmpty() && fullMapNodes.size() != HALF_MAP_NODES)
+            throw new IllegalStateException("Unexpected number of full map nodes.");
 
         HalfMap halfMap = halfMapConverter.convertHalfMap(playerHalfMap);
         Notification notification = halfMapValidator.validate(halfMap);
-        if (notification.hasErrors())
+        if (notification.hasErrors()) {
+            endGame(playerParticipation, null);
             throw notification.getErrors().getFirst();
+        }
 
-        XYPair fortLocation = halfMap.potentialForts().stream()
+        boolean isTopOrLeftSide = playerParticipation.isFirstTurn() == game.hasFirstPlayerTopOrLeftSide();
+        XYPair offset;
+        if (isTopOrLeftSide)
+            offset = new XYPair(0, 0);
+        else if (game.hasHorizontalFullMap())
+            offset = new XYPair(HALF_MAP_SIZE.x(), 0);
+        else
+            offset = new XYPair(0, HALF_MAP_SIZE.y());
+
+        List<FullMapNodeEntity> newFullMapNodes = halfMap.nodes().entrySet().stream()
+                .map(entry -> {
+                    XYPair halfMapCoordinate = entry.getKey();
+                    var fullMapCoordinate = new XYPair(halfMapCoordinate.x() + offset.x(), halfMapCoordinate.y() + offset.y());
+                    return new FullMapNodeEntity(game, fullMapCoordinate.x(), fullMapCoordinate.y(), entry.getValue());
+                })
+                .toList();
+        fullMapNodeRepository.saveAll(newFullMapNodes);
+
+        XYPair halfMapFortLocation = halfMap.potentialForts().stream()
                 .skip(randomGenerator.nextInt(halfMap.potentialForts().size()))
                 .findFirst()
-                .orElseThrow();
+                .orElseThrow(() -> new IllegalStateException("No forts found in half map."));
         List<XYPair> potentialTreasures = halfMap.nodes().entrySet().stream()
                 .filter(entry -> entry.getValue() == ETerrain.Grass)
-                .filter(entry -> !fortLocation.equals(entry.getKey()))
+                .filter(entry -> !halfMapFortLocation.equals(entry.getKey()))
                 .map(Map.Entry::getKey)
                 .toList();
-        XYPair treasureLocation = potentialTreasures.get(randomGenerator.nextInt(potentialTreasures.size()));
-        var playerFullMap =
-                new PlayerFullMapEntity(playerParticipation, fortLocation.x(), fortLocation.y(), treasureLocation.x(), treasureLocation.y());
+        XYPair halfMapTreasureLocation = potentialTreasures.get(randomGenerator.nextInt(potentialTreasures.size()));
+
+        var fullMapFortLocation = new XYPair(halfMapFortLocation.x() + offset.x(), halfMapFortLocation.y() + offset.y());
+        var fullMapTreasureLocation = new XYPair(halfMapTreasureLocation.x() + offset.x(), halfMapTreasureLocation.y() + offset.y());
+
+        var playerFullMap = new PlayerFullMapEntity(playerParticipation, fullMapFortLocation.x(), fullMapFortLocation.y(),
+                fullMapTreasureLocation.x(), fullMapTreasureLocation.y());
         playerFullMapRepository.save(playerFullMap);
+
+        GameStateEntity newGameState = latestGameState.advanceGameState(null);
+        gameStateRepository.save(newGameState);
+
+        PlayerStateEntity newMyPlayerState = null;
+
+        for (PlayerStateEntity playerState : latestGameState.getPlayerStates()) {
+            PlayerStateEntity newPlayerState = playerState.advancePlayerState(newGameState);
+            playerStateRepository.save(newPlayerState);
+
+            if (playerState.getPlayerParticipation().getPlayerId().equals(playerParticipation.getPlayerId()))
+                newMyPlayerState = newPlayerState;
+
+            playerState.getPlayerRound().ifPresent(playerRound -> {
+                PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(newPlayerState);
+                playerRoundRepository.save(newPlayerRound);
+            });
+
+            if (newPlayerState.getPlayerGameState() == EPlayerGameState.MustAct)
+                commandTimeRepository.save(new CommandTimeEntity(newPlayerState.getPlayerParticipation(), LocalDateTime.now()));
+        }
+
+        var newPlayerRound = new PlayerRoundEntity(newMyPlayerState, playerFullMap.getFortX(), playerFullMap.getFortY(), false);
+        playerRoundRepository.save(newPlayerRound);
     }
 }
