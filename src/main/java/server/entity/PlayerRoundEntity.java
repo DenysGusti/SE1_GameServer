@@ -45,6 +45,13 @@ public class PlayerRoundEntity {
         this.collectedTreasure = collectedTreasure;
     }
 
+    public PlayerRoundEntity advancePlayerRound(PlayerStateEntity playerState) {
+        if (playerState == null)
+            throw new IllegalArgumentException("playerState is null");
+
+        return new PlayerRoundEntity(playerState, playerX, playerY, collectedTreasure);
+    }
+
     public String getPlayerStateId() {
         return playerStateId;
     }
