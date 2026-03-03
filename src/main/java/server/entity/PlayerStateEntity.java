@@ -59,6 +59,14 @@ public class PlayerStateEntity {
         };
     }
 
+    public PlayerStateEntity endPlayerState(GameStateEntity gameState, boolean lost) {
+        if (gameState == null)
+            throw new IllegalArgumentException("gameState is null");
+
+        EPlayerGameState playerGameState = lost ? EPlayerGameState.Lost : EPlayerGameState.Won;
+        return new PlayerStateEntity(playerParticipation, gameState, playerGameState);
+    }
+
     public EPlayerGameState getPlayerGameState() {
         return playerGameState;
     }
