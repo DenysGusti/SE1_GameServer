@@ -58,7 +58,6 @@ public class GameService {
     private final PlayerRegistrationRepository playerRegistrationRepository;
     private final PlayerRoundRepository playerRoundRepository;
     private final PlayerStateRepository playerStateRepository;
-    private final QueryTimeRepository queryTimeRepository;
 
     public GameService(RandomGenerator randomGenerator,
                        HalfMapValidator halfMapValidator,
@@ -71,8 +70,7 @@ public class GameService {
                        PlayerParticipationRepository playerParticipationRepository,
                        PlayerRegistrationRepository playerRegistrationRepository,
                        PlayerRoundRepository playerRoundRepository,
-                       PlayerStateRepository playerStateRepository,
-                       QueryTimeRepository queryTimeRepository
+                       PlayerStateRepository playerStateRepository
     ) {
         if (randomGenerator == null)
             throw new IllegalArgumentException("randomGenerator is null");
@@ -98,8 +96,6 @@ public class GameService {
             throw new IllegalArgumentException("playerRoundRepository is null");
         if (playerStateRepository == null)
             throw new IllegalArgumentException("playerStateRepository is null");
-        if (queryTimeRepository == null)
-            throw new IllegalArgumentException("queryTimeRepository is null");
 
         this.randomGenerator = randomGenerator;
         this.halfMapValidator = halfMapValidator;
@@ -113,7 +109,6 @@ public class GameService {
         this.playerRegistrationRepository = playerRegistrationRepository;
         this.playerRoundRepository = playerRoundRepository;
         this.playerStateRepository = playerStateRepository;
-        this.queryTimeRepository = queryTimeRepository;
     }
 
     public UniqueGameIdentifier createGame(boolean debugMode, boolean dummyCompetition) {
@@ -275,8 +270,6 @@ public class GameService {
 
     public GameState getGameState(UniqueGameIdentifier uniqueGameIdentifier, UniquePlayerIdentifier uniquePlayerIdentifier) {
         PlayerParticipationEntity playerParticipation = getPlayerParticipation(uniqueGameIdentifier, uniquePlayerIdentifier);
-        queryTimeRepository.save(new QueryTimeEntity(playerParticipation, LocalDateTime.now()));
-
         GameStateEntity latestGameState =
                 gameStateRepository.findFirstByGameIdOrderByNrDesc(uniqueGameIdentifier.getUniqueGameID())
                         .orElseThrow(() -> new IllegalStateException("No game state exists yet."));

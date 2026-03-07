@@ -37,9 +37,6 @@ public class PlayerParticipationEntity {
     @OneToMany(mappedBy = "playerParticipation", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CommandTimeEntity> commandTimes;
 
-    @OneToMany(mappedBy = "playerParticipation", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<QueryTimeEntity> queryTimes;
-
     protected PlayerParticipationEntity() {
     }
 
