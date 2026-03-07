@@ -119,6 +119,7 @@ public class GameService {
         this.playerStateRepository = playerStateRepository;
     }
 
+    @NonNull
     public UniqueGameIdentifier createGame(boolean debugMode, boolean dummyCompetition) {
         String newGameId;
         do {
@@ -158,6 +159,7 @@ public class GameService {
         playerRegistrationRepository.deleteOrphanedPlayerRegistrations();
     }
 
+    @NonNull
     public UniquePlayerIdentifier registerPlayer(UniqueGameIdentifier uniqueGameIdentifier,
                                                  PlayerRegistration playerRegistration) {
         if (playerRegistration == null)
@@ -276,6 +278,7 @@ public class GameService {
         return playerParticipation;
     }
 
+    @NonNull
     public GameState getGameState(UniqueGameIdentifier uniqueGameIdentifier, UniquePlayerIdentifier uniquePlayerIdentifier) {
         PlayerParticipationEntity playerParticipation = getPlayerParticipation(uniqueGameIdentifier, uniquePlayerIdentifier);
         GameStateEntity latestGameState =
