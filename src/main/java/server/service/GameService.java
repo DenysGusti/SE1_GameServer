@@ -211,7 +211,7 @@ public class GameService {
     }
 
     private void createFirstGameState(PlayerParticipationEntity playerParticipation, GameEntity game) {
-        var gameState = new GameStateEntity(game, 0, null);
+        var gameState = new GameStateEntity(game, 0);
         gameStateRepository.save(gameState);
 
         var playerState = new PlayerStateEntity(playerParticipation, gameState, EPlayerGameState.MustWait);
@@ -237,7 +237,7 @@ public class GameService {
 
         GameStateEntity gameState = gameStateRepository.findFirstByGameIdOrderByNrDesc(game.getId())
                 .orElseThrow(() -> new IllegalStateException("No game state exists yet."))
-                .advanceGameState(null);
+                .advanceGameState();
         gameStateRepository.save(gameState);
 
         var playerOneState = new PlayerStateEntity(playerOne, gameState, playerOneGameState);
@@ -420,7 +420,11 @@ public class GameService {
             logger.warn("Player {} submitting action too infrequently: {} ms",
                     playerParticipation.getPlayerRegistration().getUAccount(), millisSinceLastCommand);
 
-            endGame(playerParticipation, move);
+            PlayerStateEntity winningPlayerState = endGame(playerParticipation);
+            winningPlayerState.getPlayerRound().ifPresent(playerRound -> {
+                PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(winningPlayerState);
+                playerRoundRepository.save(newPlayerRound);
+            });
             throw new TooSlowActionException();
         }
 
@@ -435,7 +439,7 @@ public class GameService {
                 .orElseThrow(() -> new IllegalStateException("No game state exists yet."));
 
         if (!game.isDebugMode())
-            checkCommandTime(playerParticipation, null);
+            checkCommandTime(playerParticipation);
 
         PlayerStateEntity currentPlayerState = latestGameState.getPlayerStates().stream()
                 .filter(ps -> ps.getPlayerParticipation().getPlayerId().equals(playerParticipation.getPlayerId()))
@@ -456,7 +460,11 @@ public class GameService {
         HalfMap halfMap = halfMapConverter.convertHalfMap(playerHalfMap);
         Notification notification = halfMapValidator.validate(halfMap);
         if (notification.hasErrors()) {
-            endGame(playerParticipation, null);
+            PlayerStateEntity winningPlayerState = endGame(playerParticipation);
+            winningPlayerState.getPlayerRound().ifPresent(playerRound -> {
+                PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(winningPlayerState);
+                playerRoundRepository.save(newPlayerRound);
+            });
             throw notification.getErrors().getFirst();
         }
 

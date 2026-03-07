@@ -27,17 +27,13 @@ public class GameStateEntity {
     @Column(nullable = false, updatable = false)
     private int nr;
 
-    @Enumerated(EnumType.STRING)
-    @Column(updatable = false)
-    private EMove transitionMove;
-
     @OneToMany(mappedBy = "gameState", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private final List<PlayerStateEntity> playerStates = new ArrayList<>();
 
     protected GameStateEntity() {
     }
 
-    public GameStateEntity(GameEntity game, int nr, EMove transitionMove) {
+    public GameStateEntity(GameEntity game, int nr) {
         if (game == null)
             throw new IllegalArgumentException("game is null");
         if (nr < 0)
@@ -45,11 +41,10 @@ public class GameStateEntity {
 
         this.game = game;
         this.nr = nr;
-        this.transitionMove = transitionMove;
     }
 
-    public GameStateEntity advanceGameState(EMove transitionMove) {
-        return new GameStateEntity(game, nr + 1, transitionMove);
+    public GameStateEntity advanceGameState() {
+        return new GameStateEntity(game, nr + 1);
     }
 
     public String getId() {
@@ -58,10 +53,6 @@ public class GameStateEntity {
 
     public int getNr() {
         return nr;
-    }
-
-    public EMove getTransitionMove() {
-        return transitionMove;
     }
 
     public GameEntity getGame() {
