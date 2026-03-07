@@ -404,22 +404,64 @@ public class GameService {
         return new GameState(fullMap, playerStates, latestGameState.getId());
     }
 
-    private void endGame(PlayerParticipationEntity lostPlayerParticipation, EMove move) {
+    private PlayerStateEntity endGame(PlayerParticipationEntity lostPlayerParticipation) {
         GameEntity game = lostPlayerParticipation.getGame();
         GameStateEntity latestGameState = gameStateRepository.findFirstByGameIdOrderByNrDesc(game.getId())
                 .orElseThrow(() -> new IllegalStateException("No game state exists yet."));
 
-        GameStateEntity newGameState = latestGameState.advanceGameState(move);
+        GameStateEntity newGameState = latestGameState.advanceGameState();
         gameStateRepository.save(newGameState);
 
+        PlayerStateEntity newMyPlayerState = null;
         for (PlayerStateEntity playerState : latestGameState.getPlayerStates()) {
-            boolean lost = playerState.getPlayerParticipation().equals(lostPlayerParticipation);
+            boolean lost = playerState.getPlayerParticipation().getPlayerId().equals(lostPlayerParticipation.getPlayerId());
             PlayerStateEntity newPlayerState = playerState.endPlayerState(newGameState, lost);
             playerStateRepository.save(newPlayerState);
+
+            if (playerState.getPlayerParticipation().getPlayerId().equals(lostPlayerParticipation.getPlayerId())) {
+                playerState.getPlayerRound().ifPresent(
+                        playerRound -> {
+                            PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(newPlayerState);
+                            playerRoundRepository.save(newPlayerRound);
+                        }
+                );
+            } else
+                newMyPlayerState = newPlayerState;
         }
+        return newMyPlayerState;
     }
 
-    private void checkCommandTime(PlayerParticipationEntity playerParticipation, EMove move) {
+    private PlayerStateEntity advanceGame(PlayerParticipationEntity myPlayerParticipation) {
+        GameEntity game = myPlayerParticipation.getGame();
+        GameStateEntity latestGameState = gameStateRepository.findFirstByGameIdOrderByNrDesc(game.getId())
+                .orElseThrow(() -> new IllegalStateException("No game state exists yet."));
+
+        GameStateEntity newGameState = latestGameState.advanceGameState();
+        gameStateRepository.save(newGameState);
+
+        PlayerStateEntity newMyPlayerState = null;
+        for (PlayerStateEntity playerState : latestGameState.getPlayerStates()) {
+            PlayerStateEntity newPlayerState = playerState.advancePlayerState(newGameState);
+            playerStateRepository.save(newPlayerState);
+
+            if (!playerState.getPlayerParticipation().getPlayerId().equals(myPlayerParticipation.getPlayerId())) {
+                playerState.getPlayerRound().ifPresent(
+                        playerRound -> {
+                            PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(newPlayerState);
+                            playerRoundRepository.save(newPlayerRound);
+                        }
+                );
+            } else
+                newMyPlayerState = newPlayerState;
+
+            if (newPlayerState.getPlayerGameState() == EPlayerGameState.MustAct)
+                commandTimeRepository.saveAndFlush(new CommandTimeEntity(newPlayerState.getPlayerParticipation(), LocalDateTime.now()));
+        }
+
+        return newMyPlayerState;
+    }
+
+    private void checkCommandTime(PlayerParticipationEntity playerParticipation) {
         CommandTimeEntity commandTime = commandTimeRepository
                 .findFirstByPlayerParticipation_PlayerIdOrderByCommandAtDesc(playerParticipation.getPlayerId())
                 .orElseThrow(() -> new IllegalStateException("No last command time recorded."));
@@ -442,9 +484,7 @@ public class GameService {
         commandTimeRepository.saveAndFlush(new CommandTimeEntity(playerParticipation, now));
     }
 
-    public void submitHalfMap(UniqueGameIdentifier uniqueGameIdentifier, PlayerHalfMap playerHalfMap) {
-        PlayerParticipationEntity playerParticipation = getPlayerParticipation(uniqueGameIdentifier, playerHalfMap);
-
+    private void checkAction(PlayerParticipationEntity playerParticipation) {
         GameEntity game = playerParticipation.getGame();
         GameStateEntity latestGameState = gameStateRepository.findFirstByGameIdOrderByNrDesc(game.getId())
                 .orElseThrow(() -> new IllegalStateException("No game state exists yet."));
@@ -457,13 +497,38 @@ public class GameService {
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Player not found in game state."));
         if (currentPlayerState.getPlayerGameState() != EPlayerGameState.MustAct) {
-            endGame(playerParticipation, null);
+            PlayerStateEntity winningPlayerState = endGame(playerParticipation);
+            winningPlayerState.getPlayerRound().ifPresent(playerRound -> {
+                PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(winningPlayerState);
+                playerRoundRepository.save(newPlayerRound);
+            });
             throw new PlayerTurnException();
         }
 
+        if (latestGameState.getNr() >= MAX_GAME_STATE_NR) {
+            PlayerStateEntity winningPlayerState = endGame(playerParticipation);
+            winningPlayerState.getPlayerRound().ifPresent(playerRound -> {
+                PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(winningPlayerState);
+                playerRoundRepository.save(newPlayerRound);
+            });
+            throw new GameRoundException();
+        }
+    }
+
+    public void submitHalfMap(UniqueGameIdentifier uniqueGameIdentifier, PlayerHalfMap playerHalfMap) {
+        PlayerParticipationEntity playerParticipation = getPlayerParticipation(uniqueGameIdentifier, playerHalfMap);
+        checkAction(playerParticipation);
+        GameEntity game = playerParticipation.getGame();
+
         List<FullMapNodeEntity> fullMapNodes = game.getFullMapNodes();
-        if (fullMapNodes.size() == FULL_MAP_NODES)
+        if (fullMapNodes.size() == FULL_MAP_NODES) {
+            PlayerStateEntity winningPlayerState = endGame(playerParticipation);
+            winningPlayerState.getPlayerRound().ifPresent(playerRound -> {
+                PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(winningPlayerState);
+                playerRoundRepository.save(newPlayerRound);
+            });
             throw new DuplicateHalfMapSubmissionException();
+        }
 
         if (!fullMapNodes.isEmpty() && fullMapNodes.size() != HALF_MAP_NODES)
             throw new IllegalStateException("Unexpected number of full map nodes.");
@@ -515,28 +580,98 @@ public class GameService {
                 fullMapTreasureLocation.x(), fullMapTreasureLocation.y());
         playerFullMapRepository.save(playerFullMap);
 
-        GameStateEntity newGameState = latestGameState.advanceGameState(null);
-        gameStateRepository.save(newGameState);
+        PlayerStateEntity newMyPlayerState = advanceGame(playerParticipation);
 
-        PlayerStateEntity newMyPlayerState = null;
+        var newPlayerRound = new PlayerRoundEntity(newMyPlayerState, playerFullMap.getFortX(), playerFullMap.getFortY(), false, 0, null);
+        playerRoundRepository.save(newPlayerRound);
+    }
 
-        for (PlayerStateEntity playerState : latestGameState.getPlayerStates()) {
-            PlayerStateEntity newPlayerState = playerState.advancePlayerState(newGameState);
-            playerStateRepository.save(newPlayerState);
+    public void submitMove(UniqueGameIdentifier uniqueGameIdentifier, PlayerMove playerMove) {
+        PlayerParticipationEntity playerParticipation = getPlayerParticipation(uniqueGameIdentifier, playerMove);
+        checkAction(playerParticipation);
+        GameEntity game = playerParticipation.getGame();
 
-            if (playerState.getPlayerParticipation().getPlayerId().equals(playerParticipation.getPlayerId()))
-                newMyPlayerState = newPlayerState;
+        GameStateEntity latestGameState = gameStateRepository.findFirstByGameIdOrderByNrDesc(game.getId())
+                .orElseThrow(() -> new IllegalStateException("No game state exists yet."));
 
-            playerState.getPlayerRound().ifPresent(playerRound -> {
-                PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(newPlayerState);
-                playerRoundRepository.save(newPlayerRound);
-            });
+        PlayerStateEntity latestPlayerState = latestGameState.getPlayerStates().stream()
+                .filter(ps -> ps.getPlayerParticipation().getPlayerId().equals(playerParticipation.getPlayerId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Player not found in game state."));
 
-            if (newPlayerState.getPlayerGameState() == EPlayerGameState.MustAct)
-                commandTimeRepository.save(new CommandTimeEntity(newPlayerState.getPlayerParticipation(), LocalDateTime.now()));
+        PlayerRoundEntity latestPlayerRound = latestPlayerState.getPlayerRound()
+                .orElseThrow(() -> new IllegalStateException("Player round not found."));
+
+        var myPlayerPosition = new XYPair(latestPlayerRound.getPlayerX(), latestPlayerRound.getPlayerY());
+        var delta = switch (playerMove.getMove()) {
+            case EMove.Up -> new XYPair(0, -1);
+            case EMove.Down -> new XYPair(0, 1);
+            case EMove.Left -> new XYPair(-1, 0);
+            case EMove.Right -> new XYPair(1, 0);
+        };
+
+        var newPosition = new XYPair(myPlayerPosition.x() + delta.x(), myPlayerPosition.y() + delta.y());
+        var fullMapSize = game.hasHorizontalFullMap() ? new XYPair(20, 5) : new XYPair(10, 10);
+        if (newPosition.x() < 0 || newPosition.x() >= fullMapSize.x() || newPosition.y() < 0 || newPosition.y() >= fullMapSize.y()) {
+            PlayerStateEntity winningPlayerState = endGame(playerParticipation);
+            PlayerRoundEntity playerRound = winningPlayerState.getPlayerRound()
+                    .orElseThrow(() -> new IllegalStateException("Player round not found."));
+            PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(winningPlayerState);
+            playerRoundRepository.save(newPlayerRound);
+            throw new OutOfBordersException(myPlayerPosition, newPosition, playerMove.getMove());
         }
 
-        var newPlayerRound = new PlayerRoundEntity(newMyPlayerState, playerFullMap.getFortX(), playerFullMap.getFortY(), false);
+        FullMapNodeEntity targetNode = fullMapNodeRepository
+                .findFirstByGameIdAndXAndY(uniqueGameIdentifier.getUniqueGameID(), newPosition.x(), newPosition.y())
+                .orElseThrow(() -> new IllegalStateException("Full map node not found for position: " + newPosition));
+
+        if (targetNode.getTerrain() == ETerrain.Water) {
+            PlayerStateEntity winningPlayerState = endGame(playerParticipation);
+            PlayerRoundEntity playerRound = winningPlayerState.getPlayerRound()
+                    .orElseThrow(() -> new IllegalStateException("Player round not found."));
+            PlayerRoundEntity newPlayerRound = playerRound.advancePlayerRound(winningPlayerState);
+            playerRoundRepository.save(newPlayerRound);
+            throw new WaterMovementException(myPlayerPosition, newPosition, playerMove.getMove());
+        }
+
+        FullMapNodeEntity startNode = fullMapNodeRepository
+                .findFirstByGameIdAndXAndY(uniqueGameIdentifier.getUniqueGameID(), myPlayerPosition.x(), myPlayerPosition.y())
+                .orElseThrow(() -> new IllegalStateException("Full map node not found for position: " + myPlayerPosition));
+
+        PlayerRoundEntity newPlayerRound;
+        int neededMovesCount = terrainMovementCost.get(startNode.getTerrain()) + terrainMovementCost.get(targetNode.getTerrain());
+
+        if (playerMove.getMove().equals(latestPlayerRound.getPendingMove().orElse(null))) {
+            int newPendingCount = latestPlayerRound.getPendingCount() + 1;
+            if (newPendingCount == neededMovesCount) {
+                PlayerFullMapEntity myPlayerFullMap = playerParticipation.getPlayerFullMap()
+                        .orElseThrow(() -> new IllegalStateException("May player full map not found."));
+                var myTreasurePosition = new XYPair(myPlayerFullMap.getTreasureX(), myPlayerFullMap.getTreasureY());
+                boolean hasCollectedTreasure = latestPlayerRound.hasCollectedTreasure() || newPosition.equals(myTreasurePosition);
+
+                PlayerFullMapEntity enemyPlayerFullMap = latestGameState.getPlayerStates().stream()
+                        .filter(ps -> !ps.getPlayerParticipation().getPlayerId().equals(playerParticipation.getPlayerId()))
+                        .findFirst().map(PlayerStateEntity::getPlayerParticipation)
+                        .flatMap(PlayerParticipationEntity::getPlayerFullMap)
+                        .orElseThrow(() -> new IllegalStateException("Enemy player full map not found."));
+                XYPair enemyFortPosition = new XYPair(enemyPlayerFullMap.getFortX(), enemyPlayerFullMap.getFortY());
+
+                PlayerStateEntity newMyPlayerState;
+                if (newPosition.equals(enemyFortPosition))
+                    newMyPlayerState = endGame(enemyPlayerFullMap.getPlayerParticipation());
+                else
+                    newMyPlayerState = advanceGame(playerParticipation);
+
+                newPlayerRound = new PlayerRoundEntity(newMyPlayerState, newPosition.x(), newPosition.y(), hasCollectedTreasure, 0, null);
+            } else {
+                PlayerStateEntity newMyPlayerState = advanceGame(playerParticipation);
+                newPlayerRound = new PlayerRoundEntity(newMyPlayerState, myPlayerPosition.x(), myPlayerPosition.y(), latestPlayerRound.hasCollectedTreasure(), newPendingCount, playerMove.getMove());
+            }
+        } else {
+            PlayerStateEntity newMyPlayerState = advanceGame(playerParticipation);
+            newPlayerRound = new PlayerRoundEntity(newMyPlayerState, myPlayerPosition.x(), myPlayerPosition.y(), latestPlayerRound.hasCollectedTreasure(), 1, playerMove.getMove());
+        }
+
         playerRoundRepository.save(newPlayerRound);
     }
 }

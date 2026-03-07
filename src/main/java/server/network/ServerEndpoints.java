@@ -3,6 +3,7 @@ package server.network;
 import jakarta.servlet.http.HttpServletResponse;
 
 import messagesbase.messagesfromclient.PlayerHalfMap;
+import messagesbase.messagesfromclient.PlayerMove;
 import messagesbase.messagesfromserver.GameState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,10 +88,6 @@ public class ServerEndpoints {
                 gameID.getUniqueGameID(), playerID.getUniquePlayerID());
 
         GameState gameState = gameService.getGameState(gameID, playerID);
-
-        logger.debug("Successfully generated game state for game ID: {} with ID: {}",
-                gameID.getUniqueGameID(), gameState.getGameStateId());
-        logger.trace("Game state: {}", gameState.getPlayers());
         return new ResponseEnvelope<>(gameState);
     }
 
@@ -101,8 +98,16 @@ public class ServerEndpoints {
                 playerHalfMap.getUniquePlayerID());
 
         gameService.submitHalfMap(gameID, playerHalfMap);
+        return new ResponseEnvelope<>();
+    }
 
-        logger.debug("Successfully accepted half map for game ID: {}", gameID.getUniqueGameID());
+    @RequestMapping(value = "/{gameID}/moves", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
+    public @ResponseBody ResponseEnvelope<?> endGame(@Validated @PathVariable UniqueGameIdentifier gameID,
+                                                     @Validated @RequestBody PlayerMove playerMove) {
+        logger.info("Received move submission for game ID: {} from player ID: {}", gameID.getUniqueGameID(),
+                playerMove.getUniquePlayerID());
+
+        gameService.submitMove(gameID, playerMove);
         return new ResponseEnvelope<>();
     }
 }
