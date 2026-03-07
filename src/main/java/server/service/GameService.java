@@ -33,7 +33,7 @@ public class GameService {
     private static final String CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int GAME_ID_LENGTH = 5;
 
-    private static final int MAX_GAMES = 5;
+    private static final int MAX_GAMES = 99;
     private static final int PLAYERS_PER_GAME = 2;
     private static final int MAX_GAMES_PER_PLAYER = 100;
     private static final int HALF_MAP_NODES = 50;
