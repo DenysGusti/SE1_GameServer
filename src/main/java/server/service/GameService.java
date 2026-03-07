@@ -243,7 +243,7 @@ public class GameService {
             playerTwoGameState = EPlayerGameState.MustAct;
             commandTime = new CommandTimeEntity(playerTwo, LocalDateTime.now());
         }
-        commandTimeRepository.save(commandTime);
+        commandTimeRepository.saveAndFlush(commandTime);
 
         GameStateEntity gameState = gameStateRepository.findFirstByGameIdOrderByNrDesc(game.getId())
                 .orElseThrow(() -> new IllegalStateException("No game state exists yet."))
@@ -439,7 +439,7 @@ public class GameService {
             throw new TooSlowActionException();
         }
 
-        commandTimeRepository.save(new CommandTimeEntity(playerParticipation, now));
+        commandTimeRepository.saveAndFlush(new CommandTimeEntity(playerParticipation, now));
     }
 
     public void submitHalfMap(UniqueGameIdentifier uniqueGameIdentifier, PlayerHalfMap playerHalfMap) {
