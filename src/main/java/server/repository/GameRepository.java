@@ -9,7 +9,6 @@ import java.util.List;
 
 @Repository
 public interface GameRepository extends JpaRepository<GameEntity, String> {
-
     void deleteByCreatedAtBefore(LocalDateTime cutoff);
 
     List<GameEntity> findAllByOrderByCreatedAtAsc();
