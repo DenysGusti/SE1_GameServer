@@ -35,15 +35,23 @@ public class GameService {
 
     private static final int MAX_GAMES = 5;
     private static final int PLAYERS_PER_GAME = 2;
-    private static final int MAX_GAMES_PER_PLAYER = 10;
+    private static final int MAX_GAMES_PER_PLAYER = 100;
     private static final int HALF_MAP_NODES = 50;
     private static final int FULL_MAP_NODES = 100;
 
     private static final XYPair HALF_MAP_SIZE = new XYPair(10, 5);
 
-    private static final Duration GAME_LIFETIME = Duration.ofMinutes(3);
+    private static final Duration GAME_LIFETIME = Duration.ofMinutes(10);
     //    private static final Duration MINIMUM_POLLING_INTERVAL = Duration.ofMillis(300);
     private static final Duration MAXIMUM_ACTION_INTERVAL = Duration.ofMillis(5500);
+
+    private static final int REVEAL_GAME_STATE_NR = 17;
+    private static final int MAX_GAME_STATE_NR = 319;
+
+    private static final Map<ETerrain, Integer> terrainMovementCost = Map.of(
+            ETerrain.Grass, 1,
+            ETerrain.Mountain, 2
+    );
 
     private final RandomGenerator randomGenerator;
     private final HalfMapValidator halfMapValidator;
@@ -338,7 +346,7 @@ public class GameService {
         XYPair enemy;
         XYPair enemyFort;
         if (hasEnemy) {
-            if (latestGameState.getNr() >= 18)
+            if (latestGameState.getNr() >= REVEAL_GAME_STATE_NR)
                 enemy = new XYPair(enemyPlayerPlayerRound.orElseThrow().getPlayerX(), enemyPlayerPlayerRound.orElseThrow().getPlayerY());
             else {
                 List<FullMapNodeEntity> validFakeTiles = latestGameState.getGame().getFullMapNodes().stream()
