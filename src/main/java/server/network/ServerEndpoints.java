@@ -87,6 +87,7 @@ public class ServerEndpoints {
                             "http://localhost:18235",
                             gameId.getUniqueGameID()
                     );
+//                    processBuilder.inheritIO();
                     processBuilder.start();
                     logger.debug("Dummy client process started successfully.");
                 } catch (IOException exception) {

@@ -226,7 +226,6 @@ public class GameService {
 
         var playerState = new PlayerStateEntity(playerParticipation, gameState, EPlayerGameState.MustWait);
         playerStateRepository.save(playerState);
-        logger.info("test: {} -> {}", playerState, playerState.getPlayerRound());
     }
 
     private void createSecondGameState(PlayerParticipationEntity playerOne, PlayerParticipationEntity playerTwo,
