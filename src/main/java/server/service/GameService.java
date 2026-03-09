@@ -657,7 +657,7 @@ public class GameService {
                 XYPair enemyFortPosition = new XYPair(enemyPlayerFullMap.getFortX(), enemyPlayerFullMap.getFortY());
 
                 PlayerStateEntity newMyPlayerState;
-                if (newPosition.equals(enemyFortPosition))
+                if (hasCollectedTreasure && newPosition.equals(enemyFortPosition))
                     newMyPlayerState = endGame(enemyPlayerFullMap.getPlayerParticipation());
                 else
                     newMyPlayerState = advanceGame(playerParticipation);
