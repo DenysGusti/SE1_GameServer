@@ -81,13 +81,16 @@ public class ServerEndpoints {
                 try {
                     var processBuilder = new ProcessBuilder(
                             "java",
+                            "-Dfile.encoding=UTF-8",
+                            "-Dsun.stdout.encoding=UTF-8",
+                            "-Dsun.stderr.encoding=UTF-8",
                             "-jar",
                             dummyClientPath.toAbsolutePath().toString(),
                             "TR",
                             "http://localhost:18235",
                             gameId.getUniqueGameID()
                     );
-//                    processBuilder.inheritIO();
+                    processBuilder.inheritIO();
                     processBuilder.start();
                     logger.debug("Dummy client process started successfully.");
                 } catch (IOException exception) {
@@ -150,7 +153,7 @@ public class ServerEndpoints {
 
     @RequestMapping(value = "/{gameID}/moves", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
     public @ResponseBody ResponseEnvelope<?> receiveMove(@Validated @PathVariable UniqueGameIdentifier gameID,
-                                                     @Validated @RequestBody PlayerMove playerMove) {
+                                                         @Validated @RequestBody PlayerMove playerMove) {
         logger.info("Received move submission for game ID: {} from player ID: {}", gameID.getUniqueGameID(),
                 playerMove.getUniquePlayerID());
 
