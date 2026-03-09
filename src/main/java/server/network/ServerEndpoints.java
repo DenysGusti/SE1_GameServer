@@ -149,7 +149,7 @@ public class ServerEndpoints {
     }
 
     @RequestMapping(value = "/{gameID}/moves", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
-    public @ResponseBody ResponseEnvelope<?> endGame(@Validated @PathVariable UniqueGameIdentifier gameID,
+    public @ResponseBody ResponseEnvelope<?> receiveMove(@Validated @PathVariable UniqueGameIdentifier gameID,
                                                      @Validated @RequestBody PlayerMove playerMove) {
         logger.info("Received move submission for game ID: {} from player ID: {}", gameID.getUniqueGameID(),
                 playerMove.getUniquePlayerID());
