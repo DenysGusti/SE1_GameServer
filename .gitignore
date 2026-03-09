@@ -11,3 +11,4 @@ out
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+se_data

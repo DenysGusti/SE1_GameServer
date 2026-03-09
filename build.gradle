@@ -76,17 +76,13 @@ dependencies {
     // OR mapper integration (Hibernate) based on Spring
     implementation "org.springframework.boot:spring-boot-starter-data-jpa:${springBootVersion}"
 
-    // SQLite JDBC driver
-    implementation 'org.xerial:sqlite-jdbc:3.40.1.0'
+    runtimeOnly 'com.h2database:h2:2.2.224'
 
     // Java 11 removed Java EE components,
     // so we need to get the JAXB Reference Implementation
     // for network message marshalling.
     implementation "jakarta.xml.bind:jakarta.xml.bind-api:4.0.2"
     implementation "com.sun.xml.bind:jaxb-impl:4.0.2"
-
-
-    implementation "org.hibernate.orm:hibernate-community-dialects:6.5.2.Final"
 
     // Use the JUnit test framework, we support only version 5.
     // JUnit 4 should no longer be used.
