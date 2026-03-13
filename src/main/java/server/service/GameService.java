@@ -364,6 +364,8 @@ public class GameService {
             enemyFort = null;
         }
 
+        boolean hasCollectedTreasure = myPlayerPlayerRound.map(PlayerRoundEntity::hasCollectedTreasure).orElse(false);
+
         List<FullMapNode> fullMapNodes = latestGameState.getGame().getFullMapNodes().stream()
                 .map(fullMapNode -> {
                     var node = new XYPair(fullMapNode.getX(), fullMapNode.getY());
@@ -386,7 +388,7 @@ public class GameService {
                         if (Math.max(Math.abs(my.x() - node.x()), Math.abs(my.y() - node.y())) <= fowRadius) {
                             if (node.equals(enemyFort))
                                 fortState = EFortState.EnemyFortPresent;
-                            else if (node.equals(myTreasure))
+                            else if (node.equals(myTreasure) && !hasCollectedTreasure)
                                 treasureState = ETreasureState.MyTreasureIsPresent;
                         }
                     }
