@@ -117,7 +117,7 @@ public class ServerEndpoints {
     }
 
     @RequestMapping(value = "/{gameID}/players", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
-    public @ResponseBody ResponseEnvelope<UniquePlayerIdentifier> registerPlayer(
+    public synchronized @ResponseBody ResponseEnvelope<UniquePlayerIdentifier> registerPlayer(
             @Validated @PathVariable("gameID") UniqueGameIdentifier gameID,
             @Validated @RequestBody PlayerRegistration playerRegistration) {
 
