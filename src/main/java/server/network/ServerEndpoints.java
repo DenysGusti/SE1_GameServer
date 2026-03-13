@@ -118,7 +118,7 @@ public class ServerEndpoints {
 
     @RequestMapping(value = "/{gameID}/players", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
     public @ResponseBody ResponseEnvelope<UniquePlayerIdentifier> registerPlayer(
-            @Validated @PathVariable UniqueGameIdentifier gameID,
+            @Validated @PathVariable("gameID") UniqueGameIdentifier gameID,
             @Validated @RequestBody PlayerRegistration playerRegistration) {
 
         logger.info("Received player registration attempt from {} for game ID: {}",
@@ -132,8 +132,8 @@ public class ServerEndpoints {
     }
 
     @RequestMapping(value = "/{gameID}/states/{playerID}", method = RequestMethod.GET, produces = MediaType.APPLICATION_XML_VALUE)
-    public @ResponseBody ResponseEnvelope<?> sendGameState(@Validated @PathVariable UniqueGameIdentifier gameID,
-                                                           @Validated @PathVariable UniquePlayerIdentifier playerID) {
+    public @ResponseBody ResponseEnvelope<?> sendGameState(@Validated @PathVariable("gameID") UniqueGameIdentifier gameID,
+                                                           @Validated @PathVariable("playerID") UniquePlayerIdentifier playerID) {
         logger.info("Received game state request for game ID: {} from player ID: {}",
                 gameID.getUniqueGameID(), playerID.getUniquePlayerID());
 
@@ -142,7 +142,7 @@ public class ServerEndpoints {
     }
 
     @RequestMapping(value = "/{gameID}/halfmaps", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
-    public @ResponseBody ResponseEnvelope<?> receiveMap(@Validated @PathVariable UniqueGameIdentifier gameID,
+    public @ResponseBody ResponseEnvelope<?> receiveMap(@Validated @PathVariable("gameID") UniqueGameIdentifier gameID,
                                                         @Validated @RequestBody PlayerHalfMap playerHalfMap) {
         logger.info("Received half map submission for game ID: {} from player ID: {}", gameID.getUniqueGameID(),
                 playerHalfMap.getUniquePlayerID());
@@ -152,7 +152,7 @@ public class ServerEndpoints {
     }
 
     @RequestMapping(value = "/{gameID}/moves", method = RequestMethod.POST, consumes = MediaType.APPLICATION_XML_VALUE, produces = MediaType.APPLICATION_XML_VALUE)
-    public @ResponseBody ResponseEnvelope<?> receiveMove(@Validated @PathVariable UniqueGameIdentifier gameID,
+    public @ResponseBody ResponseEnvelope<?> receiveMove(@Validated @PathVariable("gameID") UniqueGameIdentifier gameID,
                                                          @Validated @RequestBody PlayerMove playerMove) {
         logger.info("Received move submission for game ID: {} from player ID: {}", gameID.getUniqueGameID(),
                 playerMove.getUniquePlayerID());
