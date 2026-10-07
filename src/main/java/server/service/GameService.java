@@ -543,11 +543,11 @@ public class GameService {
 
         HalfMap halfMap = halfMapConverter.convertHalfMap(playerHalfMap);
         HalfMapValidator validator = halfMapValidator.copy();
-        if (!playerParticipation.isFirstTurn()) {
-            server.data.FullMap opponentFullMap = fullMapConverter.convertFullMap(fullMapNodes);
-            var secondHalfMapRule = new SecondHalfMapTransitionRule(opponentFullMap);
-            validator.addRule(secondHalfMapRule);
-        }
+//        if (!playerParticipation.isFirstTurn()) {
+//            server.data.FullMap opponentFullMap = fullMapConverter.convertFullMap(fullMapNodes);
+//            var secondHalfMapRule = new SecondHalfMapTransitionRule(opponentFullMap);
+//            validator.addRule(secondHalfMapRule);
+//        }
 
         Notification notification = validator.validate(halfMap);
         if (notification.hasErrors()) {
