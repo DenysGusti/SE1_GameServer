@@ -10,6 +10,7 @@ import messagesbase.messagesfromserver.*;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import server.converter.FullMapConverter;
 import server.converter.HalfMapConverter;
 import server.data.HalfMap;
 import server.data.XYPair;
@@ -18,6 +19,7 @@ import server.exception.*;
 import server.repository.*;
 import server.validation.HalfMapValidator;
 import server.validation.Notification;
+import server.validation.rule.SecondHalfMapTransitionRule;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -56,6 +58,7 @@ public class GameService {
     private final RandomGenerator randomGenerator;
     private final HalfMapValidator halfMapValidator;
     private final HalfMapConverter halfMapConverter;
+    private final FullMapConverter fullMapConverter;
 
     private final CommandTimeRepository commandTimeRepository;
     private final FullMapNodeRepository fullMapNodeRepository;
@@ -70,6 +73,7 @@ public class GameService {
     public GameService(RandomGenerator randomGenerator,
                        HalfMapValidator halfMapValidator,
                        HalfMapConverter halfMapConverter,
+                       FullMapConverter fullMapConverter,
                        CommandTimeRepository commandTimeRepository,
                        FullMapNodeRepository fullMapNodeRepository,
                        GameRepository gameRepository,
@@ -86,6 +90,8 @@ public class GameService {
             throw new IllegalArgumentException("halfMapValidator is null");
         if (halfMapConverter == null)
             throw new IllegalArgumentException("halfMapConverter is null");
+        if (fullMapConverter == null)
+            throw new IllegalArgumentException("fullMapConverter is null");
         if (commandTimeRepository == null)
             throw new IllegalArgumentException("commandTimeRepository is null");
         if (fullMapNodeRepository == null)
@@ -108,6 +114,7 @@ public class GameService {
         this.randomGenerator = randomGenerator;
         this.halfMapValidator = halfMapValidator;
         this.halfMapConverter = halfMapConverter;
+        this.fullMapConverter = fullMapConverter;
         this.commandTimeRepository = commandTimeRepository;
         this.fullMapNodeRepository = fullMapNodeRepository;
         this.gameRepository = gameRepository;
@@ -535,7 +542,14 @@ public class GameService {
             throw new IllegalStateException("Unexpected number of full map nodes.");
 
         HalfMap halfMap = halfMapConverter.convertHalfMap(playerHalfMap);
-        Notification notification = halfMapValidator.validate(halfMap);
+        HalfMapValidator validator = halfMapValidator.copy();
+        if (!playerParticipation.isFirstTurn()) {
+            server.data.FullMap opponentFullMap = fullMapConverter.convertFullMap(fullMapNodes);
+            var secondHalfMapRule = new SecondHalfMapTransitionRule(opponentFullMap);
+            validator.addRule(secondHalfMapRule);
+        }
+
+        Notification notification = validator.validate(halfMap);
         if (notification.hasErrors()) {
             PlayerStateEntity winningPlayerState = endGame(playerParticipation);
             winningPlayerState.getPlayerRound().ifPresent(playerRound -> {

@@ -2,6 +2,7 @@ package server.configuration;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import server.converter.FullMapConverter;
 import server.converter.HalfMapConverter;
 import server.validation.HalfMapValidator;
 import server.validation.rule.*;
@@ -27,5 +28,10 @@ public class ServerConfiguration {
     @Bean
     public HalfMapConverter halfMapConverter() {
         return new HalfMapConverter();
+    }
+
+    @Bean
+    public FullMapConverter fullMapConverter() {
+        return new FullMapConverter();
     }
 }
