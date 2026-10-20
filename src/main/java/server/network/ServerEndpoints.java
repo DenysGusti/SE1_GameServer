@@ -103,7 +103,7 @@ public class ServerEndpoints {
     }
 
     @Scheduled(fixedRate = 5000)
-    public void removeOldGames() {
+    public synchronized void removeOldGames() {
         logger.debug("Removing old games");
         gameService.removeOldGames();
     }
